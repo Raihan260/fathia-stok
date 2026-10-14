@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased;
+    /* aman untuk notch / home indicator saat dipasang sebagai PWA */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* iOS tidak zoom saat fokus input kalau font >= 16px */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
