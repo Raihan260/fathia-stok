@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Kategori, Produk, Role, StatusStok, Varian } from './types'
+import type { JenisMutasi, Kategori, Lokasi, Mutasi, Produk, Role, Varian } from './types'
 import { urutanUkuran } from './types'
 
 const PILIH_PRODUK = '*, kategori:kategori_id(*), varian(*)'
@@ -67,14 +67,55 @@ export async function produkPerKategori(kategoriId: string): Promise<Produk[]> {
   return (data ?? []) as unknown as Produk[]
 }
 
-/** Ubah satu status stok. Dipakai di halaman Cari dan Opname. */
-export async function setStatus(
-  varianId: string,
-  kolom: 'stok_toko' | 'stok_gudang',
-  nilai: StatusStok,
-): Promise<void> {
-  const { error } = await supabase.from('varian').update({ [kolom]: nilai }).eq('id', varianId)
+/**
+ * Semua pergerakan stok lewat sini, bukan update langsung ke tabel: fungsinya
+ * mengunci baris, menolak hasil minus, dan menulis catatan mutasi dalam satu
+ * transaksi — jadi angka dan riwayatnya tidak pernah berbeda.
+ */
+export async function catatMutasi(arg: {
+  varianId: string
+  jenis: Exclude<JenisMutasi, 'hitung_ulang'>
+  deltaToko?: number
+  deltaGudang?: number
+  catatan?: string | null
+}): Promise<Varian> {
+  const { data, error } = await supabase.rpc('catat_mutasi', {
+    p_varian_id: arg.varianId,
+    p_jenis: arg.jenis,
+    p_delta_toko: arg.deltaToko ?? 0,
+    p_delta_gudang: arg.deltaGudang ?? 0,
+    p_catatan: arg.catatan ?? null,
+  })
   if (error) throw error
+  return data as Varian
+}
+
+/** Set angka pasti hasil hitung fisik; menandai kapan terakhir dihitung. */
+export async function hitungUlang(
+  varianId: string,
+  lokasi: Lokasi,
+  jumlah: number,
+  catatan?: string | null,
+): Promise<Varian> {
+  const { data, error } = await supabase.rpc('hitung_ulang', {
+    p_varian_id: varianId,
+    p_lokasi: lokasi,
+    p_jumlah: jumlah,
+    p_catatan: catatan ?? null,
+  })
+  if (error) throw error
+  return data as Varian
+}
+
+export async function ambilMutasi(varianId: string, batas = 5): Promise<Mutasi[]> {
+  const { data, error } = await supabase
+    .from('mutasi')
+    .select('*')
+    .eq('varian_id', varianId)
+    .order('created_at', { ascending: false })
+    .limit(batas)
+  if (error) throw error
+  return (data ?? []) as Mutasi[]
 }
 
 export async function simpanProduk(p: {

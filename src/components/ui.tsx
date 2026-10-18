@@ -1,5 +1,4 @@
 import type { StatusStok } from '../lib/types'
-import { SEMUA_STATUS } from '../lib/types'
 
 /**
  * Warna status. Semua tampilan status mengambil dari sini — ganti di satu
@@ -32,37 +31,11 @@ export function StatusChip({ status, prefix }: { status: StatusStok; prefix?: st
   )
 }
 
-/** Tiga tombol besar — satu tap ganti status, cukup untuk dipakai sambil berdiri. */
-export function StatusToggle({
-  nilai,
-  onPilih,
-  disabled,
-}: {
-  nilai: StatusStok
-  onPilih: (s: StatusStok) => void
-  disabled?: boolean
-}) {
-  return (
-    <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-stone-300">
-      {SEMUA_STATUS.map((s) => {
-        const terpilih = s === nilai
-        const g = GAYA_STATUS[s]
-        return (
-          <button
-            key={s}
-            type="button"
-            disabled={disabled}
-            onClick={() => onPilih(s)}
-            className={`min-w-[64px] px-3 py-2 text-xs font-semibold transition
-              ${terpilih ? g.aktif : 'bg-white text-stone-500 hover:bg-stone-50'}
-              disabled:opacity-50`}
-          >
-            {g.label}
-          </button>
-        )
-      })}
-    </div>
-  )
+/** Titik warna — dibaca sekilas tanpa perlu membaca angkanya. */
+export function TitikStatus({ status }: { status: StatusStok }) {
+  const warna =
+    status === 'ada' ? 'bg-emerald-500' : status === 'menipis' ? 'bg-amber-500' : 'bg-rose-500'
+  return <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${warna}`} />
 }
 
 export function Spinner({ teks = 'Memuat…' }: { teks?: string }) {
