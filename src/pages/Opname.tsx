@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { hitungUlang, pesanGalat, produkPerKategori } from '../lib/api'
+import {
+  catatMutasi,
+  catatMutasiBanyak,
+  hitungUlang,
+  pesanGalat,
+  produkPerKategori,
+} from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Lokasi, Produk } from '../lib/types'
 import { pcs, statusDari, umurHitung } from '../lib/types'
@@ -73,9 +79,41 @@ export default function Opname() {
     }
     setMenyimpan(true)
     setGalat(null)
+
+    // Dua perlakuan berbeda, dan bedanya bukan cuma soal aritmatika:
+    //
+    //   120   = hasil hitung fisik. Menyetel angka mutlak DAN menandai kapan
+    //           terakhir dihitung, karena barangnya memang baru dihitung.
+    //   +20   = barang bertambah tanpa dihitung ulang. Tanggal hitung sengaja
+    //           TIDAK direset — menambah stok tidak membuat angka lama jadi
+    //           lebih terpercaya.
+    const tambah = terisi.filter(([, v]) => v.startsWith('+'))
+    const setel = terisi.filter(([, v]) => !v.startsWith('+'))
+
     let berhasil = 0
     try {
-      for (const [varianId, nilai] of terisi) {
+      if (tambah.length > 0) {
+        if (lokasi === 'gudang') {
+          // Barang baru dari produksi: satu transaksi, semua atau tidak sama
+          // sekali, dan tercatat sebagai barang masuk — bukan koreksi.
+          await catatMutasiBanyak(
+            'barang_masuk',
+            tambah.map(([varianId, v]) => ({ varian_id: varianId, jumlah: Number(v.slice(1)) })),
+          )
+        } else {
+          // Di toko tidak ada "barang masuk" — barang sampai ke rak lewat
+          // gudang. Kelebihan di sini artinya catatannya yang meleset.
+          for (const [varianId, v] of tambah) {
+            await catatMutasi({
+              varianId,
+              jenis: 'koreksi',
+              deltaToko: Number(v.slice(1)),
+            })
+          }
+        }
+        berhasil += tambah.length
+      }
+      for (const [varianId, nilai] of setel) {
         await hitungUlang(varianId, lokasi, Number(nilai))
         berhasil += 1
       }
@@ -100,6 +138,13 @@ export default function Opname() {
         placeholder="Saring: kode atau nama produk…"
         className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
       />
+
+      <p className="rounded-lg bg-stone-100 px-4 py-2.5 text-xs leading-relaxed text-stone-600">
+        Isi <strong>120</strong> kalau barangnya baru dihitung — angka diganti
+        jadi 120 dan tanggal hitungnya diperbarui. Isi <strong>+20</strong> kalau
+        barang bertambah tanpa dihitung ulang — ditambahkan ke yang tercatat, dan
+        tanggal hitungnya sengaja tidak berubah.
+      </p>
 
       <div className="flex overflow-hidden rounded-lg ring-1 ring-stone-300">
         {(
@@ -165,13 +210,21 @@ export default function Opname() {
                         </span>
                         <input
                           value={draf[v.id] ?? ''}
-                          onChange={(e) =>
-                            setDraf({ ...draf, [v.id]: e.target.value.replace(/\D/g, '') })
-                          }
+                          onChange={(e) => {
+                            // Hanya angka, boleh diawali satu tanda +.
+                            const t = e.target.value
+                            const plus = t.startsWith('+')
+                            const angka = t.replace(/\D/g, '')
+                            setDraf({ ...draf, [v.id]: angka === '' ? '' : (plus ? '+' : '') + angka })
+                          }}
                           inputMode="numeric"
                           placeholder="—"
                           aria-label={`Hasil hitung ukuran ${v.ukuran}`}
-                          className="w-20 rounded-lg border border-stone-300 px-2 py-2 text-center font-semibold tabular-nums outline-none focus:border-pink-600"
+                          className={`w-20 rounded-lg border px-2 py-2 text-center font-semibold tabular-nums outline-none ${
+                            (draf[v.id] ?? '').startsWith('+')
+                              ? 'border-sky-400 bg-sky-50 text-sky-800'
+                              : 'border-stone-300 focus:border-pink-600'
+                          }`}
                         />
                       </li>
                     )

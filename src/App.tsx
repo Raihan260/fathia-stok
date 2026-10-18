@@ -8,6 +8,8 @@ import type { Kategori } from './lib/types'
 import Login from './pages/Login'
 import PilihToko from './pages/PilihToko'
 import Cari from './pages/Cari'
+import Jual from './pages/Jual'
+import Ambil from './pages/Ambil'
 import Kelola from './pages/Kelola'
 import Opname from './pages/Opname'
 import { Galat, Spinner } from './components/ui'
@@ -114,6 +116,8 @@ export default function App() {
         <main className="px-4 py-3">
           <Routes>
             <Route path="/" element={<Cari />} />
+            <Route path="/jual" element={<Jual />} />
+            <Route path="/ambil" element={<Ambil />} />
             <Route path="/opname" element={<Opname />} />
             <Route
               path="/kelola"
@@ -126,6 +130,8 @@ export default function App() {
         <nav className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-2xl pb-[env(safe-area-inset-bottom)]">
             <Tab ke="/" label="Cari" />
+            <Tab ke="/jual" label="Jual" />
+            <Tab ke="/ambil" label="Ambil" />
             <Tab ke="/opname" label="Opname" />
             {admin && <Tab ke="/kelola" label="Kelola" />}
             {/*
@@ -153,8 +159,10 @@ function Tab({ ke, label }: { ke: string; label: string }) {
     <NavLink
       to={ke}
       end={ke === '/'}
+      // min-w-0 + truncate: lima tab di layar 375px tidak boleh saling
+      // mendorong sampai tombol Keluar terlempar keluar layar.
       className={({ isActive }) =>
-        `flex-1 py-3 text-center text-xs font-semibold ${
+        `min-w-0 flex-1 truncate px-1 py-3 text-center text-xs font-semibold ${
           isActive ? 'text-pink-700' : 'text-stone-400'
         }`
       }

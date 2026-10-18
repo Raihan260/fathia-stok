@@ -72,15 +72,42 @@ User baru otomatis dapat role `staf`. Buat akunnya di Authentication → Users.
 
 ## Halaman
 
-Pembagiannya bukan menurut situasi, tapi menurut jenis tindakan: **Cari
-mencatat kejadian, Opname membetulkan catatan.** Hitung ulang sempat ada di
-kedua halaman dan hasilnya cuma dua tempat mengerjakan hal yang sama.
+Bentuk tiap halaman mengikuti bentuk pekerjaannya di toko, bukan dibagi rata
+per tombol:
 
 | Halaman | Isi |
 |---|---|
-| Cari | Search, lalu harga + jumlah per ukuran. Tap ukuran untuk mencatat kejadian: Terjual, Ambil dari gudang, Barang masuk. Plus riwayat 5 pergerakan terakhir. |
-| Opname | Membetulkan catatan terhadap hitungan fisik. Semua ukuran satu toko sekaligus, ada kotak penyaring kalau cuma satu produk yang perlu dibetulkan. |
+| Cari | Melihat saja: harga, jumlah toko & gudang, umur hitungan, riwayat 5 pergerakan terakhir. Tidak ada tombol yang mengubah apa pun. |
+| Jual | Daftar belanja lintas model — satu pembeli reseller biasanya ambil beberapa model. Harga per baris dan total keseluruhan, lalu simpan sekali. |
+| Ambil | Memindahkan gudang ke toko. Bentuk sama dengan Jual karena juga lintas model; tanpa harga, karena tidak ada uang berpindah. |
+| Opname | Membetulkan catatan terhadap hitungan fisik, sekaligus jalur masuknya barang baru ke gudang. |
 | Kelola | Tambah/ubah produk dan ukuran, plus arsip. Admin saja. |
+
+### Kenapa tidak ada halaman "Barang masuk"
+
+Barangnya dibuat sendiri, masuk sedikit-sedikit. Tidak ada kiriman yang datang
+sekali banyak, jadi tidak ada "kejadian barang masuk" untuk dicatat — yang ada
+cuma stok gudang yang pelan-pelan bertambah. Itu masuk lewat Opname.
+
+### Dua cara mengisi Opname
+
+- `120` — hasil hitung fisik. Menyetel angka mutlak **dan** memperbarui tanggal
+  hitung, karena barangnya memang baru dihitung.
+- `+20` — barang bertambah tanpa dihitung ulang. Ditambahkan ke yang tercatat,
+  tanggal hitung sengaja **tidak** direset: menambah stok tidak membuat angka
+  lama jadi lebih terpercaya. Di gudang tercatat sebagai `barang_masuk`, di
+  toko sebagai `koreksi` — barang tidak pernah sampai ke rak tanpa lewat gudang,
+  jadi kelebihan di toko artinya catatannya yang meleset.
+
+Stok gudang per ukuran ada di kisaran ratusan, jadi tanpa `+20` tiap penambahan
+berarti menghitung ulang ratusan potong atau menjumlah di kepala.
+
+### Satu pesanan = satu transaksi
+
+`catat_mutasi_banyak()` menyimpan seluruh daftar dalam satu transaksi: semua
+baris berhasil, atau tidak ada yang tersimpan. Pesanan yang tersimpan separuh —
+empat baris masuk lalu baris kelima ditolak karena stok kurang — jauh lebih
+merepotkan daripada yang gagal seluruhnya.
 
 **Arsip** menandai `produk.aktif = false`, bukan menghapus barisnya: tabel
 `mutasi` terhubung ke `varian` dengan `on delete cascade`, jadi hapus betulan

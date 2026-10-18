@@ -1,21 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  ambilMutasi,
-  cariProduk,
-  catatMutasi,
-  hitungUlang,
-  lokasiStokKurang,
-  pesanGalat,
-  produkPerKategori,
-} from '../lib/api'
+import { ambilMutasi, cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
-import type { Lokasi, Mutasi, Produk, Varian } from '../lib/types'
+import type { Mutasi, Produk, Varian } from '../lib/types'
 import { LABEL_MUTASI, pcs, rupiah, statusDari, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
 /**
- * Halaman utama — 90% pemakaian ada di sini.
- * Target: 2 detik dari buka aplikasi sampai dapat jawaban harga dan jumlah.
+ * Halaman melihat — dan hanya melihat. Harga, jumlah, umur hitungan, riwayat.
+ *
+ * Tidak ada tombol yang mengubah apa pun di sini. Mencatat kejadian ada di
+ * halaman Jual dan Ambil (keduanya lintas model, jadi berbentuk daftar),
+ * membetulkan catatan ada di Opname. Halaman ini menjawab pertanyaan yang
+ * jadi alasan sistem ini dibuat: berapa harganya, dan masih ada berapa.
  */
 export default function Cari() {
   const toko = useToko((s) => s.toko)
@@ -29,12 +25,6 @@ export default function Cari() {
     kotak.current?.focus()
   }, [])
 
-  /**
-   * Kotak kosong = tampilkan semua produk toko ini. Layar kosong yang menunggu
-   * diketik tidak berguna buat orang yang cuma mau lihat apa saja yang ada.
-   * Pencarian ditunda 250 ms supaya tidak menembak query tiap ketukan huruf;
-   * daftar penuh dimuat langsung karena tidak ada yang sedang diketik.
-   */
   useEffect(() => {
     if (!toko) {
       setHasil([])
@@ -61,16 +51,6 @@ export default function Cari() {
     const t = setTimeout(() => void muat(), 250)
     return () => clearTimeout(t)
   }, [q, toko?.id])
-
-  /** Pasang varian hasil RPC ke daftar di layar. */
-  function gantiVarian(baru: Varian) {
-    setHasil((lama) =>
-      lama.map((p) => ({
-        ...p,
-        varian: p.varian.map((v) => (v.id === baru.id ? { ...v, ...baru } : v)),
-      })),
-    )
-  }
 
   return (
     <div className="space-y-4">
@@ -102,27 +82,19 @@ export default function Cari() {
       )}
 
       {hasil.length > 0 && q.trim() === '' && (
-        <p className="text-xs text-stone-400">
-          {hasil.length} produk · ketik untuk menyaring
-        </p>
+        <p className="text-xs text-stone-400">{hasil.length} produk · ketik untuk menyaring</p>
       )}
 
       <div className="space-y-4">
         {hasil.map((p) => (
-          <KartuProduk key={p.id} produk={p} onVarianBerubah={gantiVarian} />
+          <KartuProduk key={p.id} produk={p} />
         ))}
       </div>
     </div>
   )
 }
 
-function KartuProduk({
-  produk,
-  onVarianBerubah,
-}: {
-  produk: Produk
-  onVarianBerubah: (v: Varian) => void
-}) {
+function KartuProduk({ produk }: { produk: Produk }) {
   const [buka, setBuka] = useState<string | null>(null)
   const batas = produk.kategori?.batas_menipis ?? 24
 
@@ -148,10 +120,8 @@ function KartuProduk({
               className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-stone-50"
             >
               <span className="w-12 shrink-0 text-sm font-semibold text-stone-700">{v.ukuran}</span>
-              <span className="flex-1">
-                <span className="block text-lg font-bold leading-tight tabular-nums">
-                  {rupiah(v.harga_grosir)}
-                </span>
+              <span className="flex-1 text-lg font-bold leading-tight tabular-nums">
+                {rupiah(v.harga_grosir)}
               </span>
               <span className="flex flex-col items-end gap-1">
                 <Jumlah label="Toko" jumlah={v.jumlah_toko} batas={batas} />
@@ -159,9 +129,7 @@ function KartuProduk({
               </span>
             </button>
 
-            {buka === v.id && (
-              <PanelAksi varian={v} batas={batas} onBerubah={onVarianBerubah} />
-            )}
+            {buka === v.id && <Rincian varian={v} batas={batas} />}
           </li>
         ))}
       </ul>
@@ -179,100 +147,12 @@ function Jumlah({ label, jumlah, batas }: { label: string; jumlah: number; batas
   )
 }
 
-/**
- * Halaman ini hanya MENCATAT KEJADIAN: barang terjual, pindah, atau masuk.
- * Membetulkan catatan terhadap hitungan fisik bukan kejadian, itu urusan
- * halaman Opname — dulu ada di sini juga dan cuma jadi dua tempat mengerjakan
- * hal yang sama.
- *
- * Perkecualiannya `koreksi_*`: tidak punya tombol sendiri, hanya muncul saat
- * sebuah pencatatan ditolak karena stok tercatat kurang. Di situ koreksi
- * memang sedang dibutuhkan, bukan sekadar tersedia.
- */
-type Aksi = 'jual' | 'pindah_ke_toko' | 'barang_masuk' | 'koreksi_toko' | 'koreksi_gudang'
-
-const JUDUL_AKSI: Record<Aksi, string> = {
-  jual: 'Terjual berapa pcs?',
-  pindah_ke_toko: 'Ambil dari gudang berapa pcs?',
-  barang_masuk: 'Barang masuk gudang berapa pcs?',
-  koreksi_toko: 'Hitung fisik di toko sekarang berapa pcs?',
-  koreksi_gudang: 'Hitung fisik di gudang sekarang berapa pcs?',
-}
-
-function PanelAksi({
-  varian,
-  batas,
-  onBerubah,
-}: {
-  varian: Varian
-  batas: number
-  onBerubah: (v: Varian) => void
-}) {
-  const [aksi, setAksi] = useState<Aksi | null>(null)
-  const [nilai, setNilai] = useState('')
-  const [sibuk, setSibuk] = useState(false)
-  const [galat, setGalat] = useState<string | null>(null)
-  const [kabar, setKabar] = useState<string | null>(null)
-  /** Terisi hanya saat pencatatan ditolak karena stok tercatat kurang. */
-  const [tawarKoreksi, setTawarKoreksi] = useState<Lokasi | null>(null)
+function Rincian({ varian, batas }: { varian: Varian; batas: number }) {
   const [riwayat, setRiwayat] = useState<Mutasi[] | null>(null)
+  const [galat, setGalat] = useState<string | null>(null)
 
   const umurToko = umurHitung(varian.toko_dihitung_at)
   const umurGudang = umurHitung(varian.gudang_dihitung_at)
-  const koreksi = aksi === 'koreksi_toko' || aksi === 'koreksi_gudang'
-
-  function bersihkan() {
-    setAksi(null)
-    setNilai('')
-    setGalat(null)
-    setTawarKoreksi(null)
-  }
-
-  async function simpan() {
-    const n = Number(nilai)
-    if (!Number.isFinite(n) || n < 0 || nilai.trim() === '') {
-      setGalat('Isi jumlahnya dulu.')
-      return
-    }
-    // Koreksi boleh nol (memang habis); pencatatan kejadian tidak.
-    if (!koreksi && n === 0) {
-      setGalat('Jumlahnya tidak boleh nol.')
-      return
-    }
-    setSibuk(true)
-    setGalat(null)
-    setKabar(null)
-    try {
-      let baru: Varian
-      if (aksi === 'jual') {
-        baru = await catatMutasi({ varianId: varian.id, jenis: 'jual', deltaToko: -n })
-      } else if (aksi === 'pindah_ke_toko') {
-        baru = await catatMutasi({
-          varianId: varian.id,
-          jenis: 'pindah_ke_toko',
-          deltaGudang: -n,
-          deltaToko: n,
-        })
-      } else if (aksi === 'barang_masuk') {
-        baru = await catatMutasi({
-          varianId: varian.id,
-          jenis: 'barang_masuk',
-          deltaGudang: n,
-        })
-      } else {
-        baru = await hitungUlang(varian.id, aksi === 'koreksi_toko' ? 'toko' : 'gudang', n)
-        setKabar('Stok sudah dibetulkan. Catat lagi kejadiannya.')
-      }
-      onBerubah(baru)
-      bersihkan()
-      setRiwayat(null)
-    } catch (err) {
-      setGalat(pesanGalat(err))
-      setTawarKoreksi(lokasiStokKurang(err))
-    } finally {
-      setSibuk(false)
-    }
-  }
 
   return (
     <div className="space-y-3 bg-stone-50 px-4 py-3">
@@ -294,66 +174,6 @@ function PanelAksi({
       </div>
 
       {galat && <Galat pesan={galat} />}
-
-      {/*
-        Jalan keluar saat catatan dan kenyataan tidak cocok. Muncul hanya
-        sesudah penolakan, supaya alur normal tetap tiga tombol.
-      */}
-      {tawarKoreksi && (
-        <button
-          onClick={() => {
-            setAksi(tawarKoreksi === 'toko' ? 'koreksi_toko' : 'koreksi_gudang')
-            setNilai('')
-            setGalat(null)
-            setTawarKoreksi(null)
-          }}
-          className="w-full rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600"
-        >
-          Hitung ulang stok {tawarKoreksi}
-        </button>
-      )}
-
-      {kabar && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 ring-1 ring-emerald-200">
-          {kabar}
-        </p>
-      )}
-
-      {aksi === null ? (
-        <div className="grid grid-cols-3 gap-2">
-          <TombolAksi label="Terjual" onClick={() => setAksi('jual')} utama />
-          <TombolAksi label="Ambil dari gudang" onClick={() => setAksi('pindah_ke_toko')} />
-          <TombolAksi label="Barang masuk" onClick={() => setAksi('barang_masuk')} />
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-stone-600">{JUDUL_AKSI[aksi]}</p>
-          <div className="flex gap-2">
-            <input
-              autoFocus
-              value={nilai}
-              onChange={(e) => setNilai(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => e.key === 'Enter' && void simpan()}
-              inputMode="numeric"
-              placeholder="0"
-              className="w-24 rounded-lg border border-stone-300 px-3 py-2.5 text-lg font-semibold tabular-nums outline-none focus:border-pink-600"
-            />
-            <button
-              onClick={() => void simpan()}
-              disabled={sibuk}
-              className="flex-1 rounded-lg bg-pink-700 py-2.5 text-sm font-semibold text-white hover:bg-pink-800 disabled:opacity-60"
-            >
-              {sibuk ? 'Menyimpan…' : 'Simpan'}
-            </button>
-            <button
-              onClick={bersihkan}
-              className="px-3 text-sm text-stone-500"
-            >
-              Batal
-            </button>
-          </div>
-        </div>
-      )}
 
       {riwayat === null ? (
         <button
@@ -378,8 +198,7 @@ function PanelAksi({
               <span className="tabular-nums">
                 {m.delta_toko !== 0 && `toko ${m.delta_toko > 0 ? '+' : ''}${m.delta_toko}`}
                 {m.delta_toko !== 0 && m.delta_gudang !== 0 && ', '}
-                {m.delta_gudang !== 0 &&
-                  `gudang ${m.delta_gudang > 0 ? '+' : ''}${m.delta_gudang}`}
+                {m.delta_gudang !== 0 && `gudang ${m.delta_gudang > 0 ? '+' : ''}${m.delta_gudang}`}
               </span>
               <span className="shrink-0 text-stone-400">
                 {new Date(m.created_at).toLocaleDateString('id-ID', {
@@ -418,28 +237,5 @@ function BarisStok({
         {basi && ' ⚠'}
       </span>
     </div>
-  )
-}
-
-function TombolAksi({
-  label,
-  onClick,
-  utama,
-}: {
-  label: string
-  onClick: () => void
-  utama?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-lg px-2 py-2.5 text-xs font-semibold leading-tight transition ${
-        utama
-          ? 'bg-stone-900 text-white hover:bg-stone-800'
-          : 'bg-white text-stone-700 ring-1 ring-stone-300 hover:bg-stone-100'
-      }`}
-    >
-      {label}
-    </button>
   )
 }

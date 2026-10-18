@@ -116,6 +116,25 @@ export async function catatMutasi(arg: {
   return data as Varian
 }
 
+/**
+ * Simpan banyak baris sekaligus dalam satu transaksi. Dipakai halaman Jual
+ * dan Ambil: satu pesanan reseller biasanya lintas model, dan pesanan yang
+ * tersimpan separuh lebih merepotkan daripada yang gagal seluruhnya.
+ */
+export async function catatMutasiBanyak(
+  jenis: 'jual' | 'pindah_ke_toko' | 'barang_masuk',
+  baris: { varian_id: string; jumlah: number }[],
+  catatan?: string | null,
+): Promise<number> {
+  const { data, error } = await supabase.rpc('catat_mutasi_banyak', {
+    p_jenis: jenis,
+    p_baris: baris,
+    p_catatan: catatan ?? null,
+  })
+  if (error) throw error
+  return data as number
+}
+
 /** Set angka pasti hasil hitung fisik; menandai kapan terakhir dihitung. */
 export async function hitungUlang(
   varianId: string,
