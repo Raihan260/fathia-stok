@@ -36,8 +36,14 @@ export async function ambilKategori(): Promise<Kategori[]> {
   return data ?? []
 }
 
-/** Pencarian utama: ketik kode hangtag atau sebagian nama. */
-export async function cariProduk(q: string): Promise<Produk[]> {
+/**
+ * Pencarian utama: ketik kode hangtag atau sebagian nama.
+ *
+ * `kategoriId` wajib. Tiap toko fisik hanya menjual satu kategori, jadi
+ * pencarian yang menjangkau kategori lain cuma membuka peluang salah input
+ * barang toko sebelah tanpa si pemakai merasa berpindah ke mana-mana.
+ */
+export async function cariProduk(q: string, kategoriId: string): Promise<Produk[]> {
   const kueri = bersihkan(q)
   if (kueri.length < 1) return []
 
@@ -45,6 +51,7 @@ export async function cariProduk(q: string): Promise<Produk[]> {
     .from('produk')
     .select(PILIH_PRODUK)
     .eq('aktif', true)
+    .eq('kategori_id', kategoriId)
     .or(`kode.ilike.%${kueri}%,nama.ilike.%${kueri}%`)
     .order('kode')
     .order('urutan', { referencedTable: 'varian' })

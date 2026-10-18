@@ -23,6 +23,26 @@ sebenarnya ("ini masih ada atau tidak") dan tahan kalau sesekali lupa update.
   ukuran. Ukuran disimpan sebagai teks bebas (`1`, `5`, `S`, `XL`, `All size`)
   dengan kolom `urutan` supaya tampilannya urut benar, bukan alfabetis.
 
+## Satu sesi = satu toko
+
+Tiap kategori punya toko fisik sendiri di lokasi berbeda. Toko dipilih sekali
+saat login, lalu seluruh aplikasi terkunci ke toko itu: tidak ada chip kategori
+di halaman mana pun, dan **pencarian hanya menjangkau kategori toko itu**.
+Pencarian lintas kategori adalah sumber salah input yang paling berbahaya —
+bisa terjadi tanpa si pemakai merasa berpindah ke mana-mana.
+
+Nama toko ditampilkan tetap di header supaya salah toko ketahuan sebelum
+sempat salah input. Produk baru otomatis masuk kategori toko yang aktif.
+
+Pilihan toko disimpan di perangkat (`localStorage`), jadi HP yang dipakai di
+toko gamis anak akan selalu terbuka sebagai toko itu. Muat ulang halaman tidak
+menanyakan lagi; untuk ganti toko harus keluar lalu login lagi.
+
+Ini mencegah **kekeliruan**, bukan penyalahgunaan: pembatasannya di aplikasi,
+bukan di database. Kalau suatu saat perlu ditegakkan — misalnya karyawan toko
+A benar-benar tidak boleh menyentuh data toko B lewat cara apa pun — tambahkan
+kolom `kategori_id` di `profil` dan ikat policy RLS ke situ.
+
 ## Peran: admin dan staf
 
 | | admin | staf |

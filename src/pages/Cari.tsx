@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ambilMutasi, cariProduk, catatMutasi, hitungUlang, pesanGalat } from '../lib/api'
+import { useToko } from '../store/toko'
 import type { Mutasi, Produk, Varian } from '../lib/types'
 import { LABEL_MUTASI, pcs, rupiah, statusDari, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
@@ -9,6 +10,7 @@ import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
  * Target: 2 detik dari buka aplikasi sampai dapat jawaban harga dan jumlah.
  */
 export default function Cari() {
+  const toko = useToko((s) => s.toko)
   const [q, setQ] = useState('')
   const [hasil, setHasil] = useState<Produk[]>([])
   const [sibuk, setSibuk] = useState(false)
@@ -20,7 +22,7 @@ export default function Cari() {
   }, [])
 
   useEffect(() => {
-    if (q.trim() === '') {
+    if (q.trim() === '' || !toko) {
       setHasil([])
       setGalat(null)
       return
@@ -28,7 +30,7 @@ export default function Cari() {
     setSibuk(true)
     const t = setTimeout(async () => {
       try {
-        setHasil(await cariProduk(q))
+        setHasil(await cariProduk(q, toko.id))
         setGalat(null)
       } catch (err) {
         setGalat(pesanGalat(err))
@@ -37,7 +39,7 @@ export default function Cari() {
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [q])
+  }, [q, toko?.id])
 
   /** Pasang varian hasil RPC ke daftar di layar. */
   function gantiVarian(baru: Varian) {
@@ -51,14 +53,15 @@ export default function Cari() {
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 -mx-4 bg-stone-50/95 px-4 pb-3 pt-2 backdrop-blur">
+      {/* top-11 = tepat di bawah header nama toko yang tingginya h-11 */}
+      <div className="sticky top-11 z-10 -mx-4 bg-stone-50/95 px-4 pb-3 pt-2 backdrop-blur">
         <input
           ref={kotak}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           type="search"
           inputMode="search"
-          placeholder="Ketik kode atau nama…"
+          placeholder={toko ? `Cari di ${toko.nama}…` : 'Ketik kode atau nama…'}
           className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3.5 text-lg outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-100"
         />
       </div>

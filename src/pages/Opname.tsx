@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ambilKategori, hitungUlang, pesanGalat, produkPerKategori } from '../lib/api'
-import type { Kategori, Lokasi, Produk } from '../lib/types'
+import { hitungUlang, pesanGalat, produkPerKategori } from '../lib/api'
+import { useToko } from '../store/toko'
+import type { Lokasi, Produk } from '../lib/types'
 import { pcs, statusDari, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
@@ -10,8 +11,7 @@ import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
  * akhir — menyimpan per baris berarti menunggu jaringan di tengah hitungan.
  */
 export default function Opname() {
-  const [kategori, setKategori] = useState<Kategori[]>([])
-  const [pilih, setPilih] = useState('')
+  const toko = useToko((s) => s.toko)
   const [daftar, setDaftar] = useState<Produk[]>([])
   const [lokasi, setLokasi] = useState<Lokasi>('gudang')
   const [draf, setDraf] = useState<Record<string, string>>({})
@@ -20,21 +20,12 @@ export default function Opname() {
   const [galat, setGalat] = useState<string | null>(null)
   const [kabar, setKabar] = useState<string | null>(null)
 
-  useEffect(() => {
-    ambilKategori()
-      .then((k) => {
-        setKategori(k)
-        setPilih(k[0]?.id ?? '')
-      })
-      .catch((e) => setGalat(pesanGalat(e)))
-  }, [])
-
-  function muat(kategoriId: string) {
-    if (!kategoriId) return
+  function muat() {
+    if (!toko) return
     setSibuk(true)
     setDraf({})
     setKabar(null)
-    produkPerKategori(kategoriId)
+    produkPerKategori(toko.id)
       .then((d) => {
         setDaftar(d)
         setGalat(null)
@@ -44,9 +35,9 @@ export default function Opname() {
   }
 
   useEffect(() => {
-    muat(pilih)
+    muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pilih])
+  }, [toko?.id])
 
   // Ganti lokasi mengosongkan draf: angka toko tidak boleh tersimpan ke gudang.
   useEffect(() => {
@@ -72,7 +63,7 @@ export default function Opname() {
       }
       setKabar(`${berhasil} ukuran tersimpan.`)
       setDraf({})
-      muat(pilih)
+      muat()
     } catch (e) {
       setGalat(`${pesanGalat(e)} (${berhasil} ukuran sempat tersimpan)`)
     } finally {
@@ -83,22 +74,6 @@ export default function Opname() {
   return (
     <div className="space-y-4 pb-16">
       <h1 className="text-lg font-semibold">Hitung fisik</h1>
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {kategori.map((k) => (
-          <button
-            key={k.id}
-            onClick={() => setPilih(k.id)}
-            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ring-1 ${
-              k.id === pilih
-                ? 'bg-pink-700 text-white ring-pink-700'
-                : 'bg-white text-stone-600 ring-stone-300'
-            }`}
-          >
-            {k.nama}
-          </button>
-        ))}
-      </div>
 
       <div className="flex overflow-hidden rounded-lg ring-1 ring-stone-300">
         {(
@@ -129,7 +104,7 @@ export default function Opname() {
       {sibuk ? (
         <Spinner />
       ) : daftar.length === 0 ? (
-        <Kosong teks="Belum ada produk di kategori ini." />
+        <Kosong teks={`Belum ada produk di ${toko?.nama ?? 'toko ini'}.`} />
       ) : (
         <div className="space-y-3">
           {daftar.map((p) => {

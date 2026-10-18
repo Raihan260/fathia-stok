@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  ambilKategori,
   cariProduk,
   hapusProduk,
   hapusVarian,
@@ -9,34 +8,29 @@ import {
   simpanProduk,
   simpanVarian,
 } from '../lib/api'
-import type { Kategori, Produk } from '../lib/types'
+import { useToko } from '../store/toko'
+import type { Produk } from '../lib/types'
 import { rupiah } from '../lib/types'
 import { Galat, Kosong, Spinner } from '../components/ui'
 
-/** CRUD produk & ukuran. Jarang dipakai, jadi sengaja tidak dibuat ringkas. */
+/**
+ * CRUD produk & ukuran, terbatas pada toko yang sedang aktif. Produk baru
+ * otomatis masuk kategori toko itu — tidak ada pilihan kategori, supaya tidak
+ * ada produk yang nyasar ke toko sebelah.
+ */
 export default function Kelola() {
-  const [kategori, setKategori] = useState<Kategori[]>([])
-  const [pilihKategori, setPilihKategori] = useState<string>('')
+  const toko = useToko((s) => s.toko)
   const [daftar, setDaftar] = useState<Produk[]>([])
   const [q, setQ] = useState('')
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
   const [edit, setEdit] = useState<Produk | 'baru' | null>(null)
 
-  useEffect(() => {
-    ambilKategori()
-      .then((k) => {
-        setKategori(k)
-        setPilihKategori(k[0]?.id ?? '')
-      })
-      .catch((e) => setGalat(e.message))
-  }, [])
-
   async function muat() {
-    if (!pilihKategori && q.trim() === '') return
+    if (!toko) return
     setSibuk(true)
     try {
-      setDaftar(q.trim() ? await cariProduk(q) : await produkPerKategori(pilihKategori))
+      setDaftar(q.trim() ? await cariProduk(q, toko.id) : await produkPerKategori(toko.id))
       setGalat(null)
     } catch (e) {
       setGalat(pesanGalat(e))
@@ -48,14 +42,14 @@ export default function Kelola() {
   useEffect(() => {
     void muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pilihKategori, q])
+  }, [toko?.id, q])
 
-  if (edit) {
+  if (edit && toko) {
     return (
       <FormProduk
         produk={edit === 'baru' ? null : edit}
-        kategori={kategori}
-        kategoriAwal={pilihKategori}
+        kategoriId={toko.id}
+        presetUkuran={toko.preset_ukuran}
         onSelesai={() => {
           setEdit(null)
           void muat()
@@ -84,29 +78,11 @@ export default function Kelola() {
         className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
       />
 
-      {q.trim() === '' && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {kategori.map((k) => (
-            <button
-              key={k.id}
-              onClick={() => setPilihKategori(k.id)}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ring-1 ${
-                k.id === pilihKategori
-                  ? 'bg-pink-700 text-white ring-pink-700'
-                  : 'bg-white text-stone-600 ring-stone-300'
-              }`}
-            >
-              {k.nama}
-            </button>
-          ))}
-        </div>
-      )}
-
       {galat && <Galat pesan={galat} />}
       {sibuk ? (
         <Spinner />
       ) : daftar.length === 0 ? (
-        <Kosong teks="Belum ada produk di kategori ini." />
+        <Kosong teks={`Belum ada produk di ${toko?.nama ?? 'toko ini'}.`} />
       ) : (
         <ul className="space-y-2">
           {daftar.map((p) => (
@@ -138,18 +114,17 @@ interface BarisVarian {
 
 function FormProduk({
   produk,
-  kategori,
-  kategoriAwal,
+  kategoriId,
+  presetUkuran,
   onSelesai,
 }: {
   produk: Produk | null
-  kategori: Kategori[]
-  kategoriAwal: string
+  kategoriId: string
+  presetUkuran: string[]
   onSelesai: () => void
 }) {
   const [kode, setKode] = useState(produk?.kode ?? '')
   const [nama, setNama] = useState(produk?.nama ?? '')
-  const [katId, setKatId] = useState(produk?.kategori_id ?? kategoriAwal)
   const [catatan, setCatatan] = useState(produk?.catatan ?? '')
   const [varian, setVarian] = useState<BarisVarian[]>(
     produk?.varian.map((v) => ({ id: v.id, ukuran: v.ukuran, harga: String(v.harga_grosir) })) ?? [],
@@ -157,13 +132,12 @@ function FormProduk({
   const [sibuk, setSibuk] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
 
-  /** Isi otomatis dari preset ukuran kategori — harga diisi belakangan. */
+  /** Isi otomatis dari preset ukuran toko ini — harga diisi belakangan. */
   function pakaiPreset() {
-    const preset = kategori.find((k) => k.id === katId)?.preset_ukuran ?? []
     const sudahAda = new Set(varian.map((v) => v.ukuran))
     setVarian([
       ...varian,
-      ...preset.filter((u) => !sudahAda.has(u)).map((u) => ({ ukuran: u, harga: '0' })),
+      ...presetUkuran.filter((u) => !sudahAda.has(u)).map((u) => ({ ukuran: u, harga: '0' })),
     ])
   }
 
@@ -179,7 +153,7 @@ function FormProduk({
         id: produk?.id,
         kode,
         nama,
-        kategori_id: katId,
+        kategori_id: kategoriId,
         catatan: catatan.trim() || null,
       })
       for (const v of varian) {
@@ -226,16 +200,7 @@ function FormProduk({
           <span className="text-xs font-medium text-stone-500">Nama produk</span>
           <input value={nama} onChange={(e) => setNama(e.target.value)} className={input} />
         </label>
-        <label className="block">
-          <span className="text-xs font-medium text-stone-500">Kategori</span>
-          <select value={katId} onChange={(e) => setKatId(e.target.value)} className={input}>
-            {kategori.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nama}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Kategori tidak bisa dipilih: selalu mengikuti toko yang aktif. */}
         <label className="block">
           <span className="text-xs font-medium text-stone-500">Catatan (opsional)</span>
           <input value={catatan} onChange={(e) => setCatatan(e.target.value)} className={input} />
