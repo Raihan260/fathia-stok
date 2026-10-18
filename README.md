@@ -89,18 +89,25 @@ Barangnya dibuat sendiri, masuk sedikit-sedikit. Tidak ada kiriman yang datang
 sekali banyak, jadi tidak ada "kejadian barang masuk" untuk dicatat — yang ada
 cuma stok gudang yang pelan-pelan bertambah. Itu masuk lewat Opname.
 
-### Dua cara mengisi Opname
+### Dua mode di Opname
 
-- `120` — hasil hitung fisik. Menyetel angka mutlak **dan** memperbarui tanggal
-  hitung, karena barangnya memang baru dihitung.
-- `+20` — barang bertambah tanpa dihitung ulang. Ditambahkan ke yang tercatat,
-  tanggal hitung sengaja **tidak** direset: menambah stok tidak membuat angka
-  lama jadi lebih terpercaya. Di gudang tercatat sebagai `barang_masuk`, di
-  toko sebagai `koreksi` — barang tidak pernah sampai ke rak tanpa lewat gudang,
-  jadi kelebihan di toko artinya catatannya yang meleset.
+- **Hitung ulang** — angka yang diisi adalah jumlah sebenarnya hasil menghitung
+  barang. Menyetel angka mutlak **dan** memperbarui tanggal hitung.
+- **Tambah** — angka yang diisi adalah berapa yang bertambah, bukan jumlah
+  akhirnya. Ditambahkan ke yang tercatat, tanggal hitung sengaja **tidak**
+  direset: menambah stok tidak membuat angka lama jadi lebih bisa dipercaya.
+  Di gudang tercatat sebagai `barang_masuk`, di toko sebagai `koreksi` — barang
+  tidak pernah sampai ke rak tanpa lewat gudang, jadi kelebihan di toko artinya
+  catatannya yang meleset.
 
-Stok gudang per ukuran ada di kisaran ratusan, jadi tanpa `+20` tiap penambahan
-berarti menghitung ulang ratusan potong atau menjumlah di kepala.
+Stok gudang per ukuran ada di kisaran ratusan, jadi tanpa mode Tambah tiap
+penambahan berarti menghitung ulang ratusan potong atau menjumlah di kepala.
+
+Modenya dipilih lewat sakelar, bukan dengan mengetik `+20`: keypad angka di HP
+tidak punya tombol plus sama sekali. Ganti mode mengosongkan isian yang sedang
+diketik, karena angka yang sama berarti hal yang sangat berbeda di tiap mode.
+Di mode Tambah, hasil akhirnya ditampilkan di samping kotak isian (`→ 240`)
+supaya jelas yang diketik itu tambahan, bukan total.
 
 ### Satu pesanan = satu transaksi
 

@@ -12,22 +12,26 @@ import { pcs, statusDari, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
 /**
- * Satu-satunya tempat membetulkan catatan terhadap hitungan fisik. Halaman
- * Cari hanya mencatat kejadian (terjual, pindah, masuk); koreksi ada di sini
- * supaya tidak ada dua tempat mengerjakan hal yang sama.
+ * Membetulkan catatan terhadap hitungan fisik, sekaligus jalur masuknya barang
+ * baru ke gudang.
  *
  * Semua ukuran satu toko tampil sekaligus. Angka diisi dulu semuanya sambil
  * menghitung barang, baru disimpan sekali di akhir — menyimpan per baris
  * berarti menunggu jaringan di tengah hitungan.
- *
- * Kotak pencarian untuk saat yang perlu dibetulkan cuma satu produk, supaya
- * tidak perlu scroll satu toko penuh.
  */
+type Mode = 'hitung' | 'tambah'
+
 export default function Opname() {
   const toko = useToko((s) => s.toko)
   const [daftar, setDaftar] = useState<Produk[]>([])
   const [q, setQ] = useState('')
   const [lokasi, setLokasi] = useState<Lokasi>('gudang')
+  /**
+   * Angka yang sama berarti dua hal berbeda tergantung mode, jadi modenya
+   * dipilih sebelum mengetik, bukan diketik sebagai tanda "+": keypad angka
+   * di HP tidak punya tombol plus sama sekali.
+   */
+  const [mode, setMode] = useState<Mode>('hitung')
   const [draf, setDraf] = useState<Record<string, string>>({})
   const [sibuk, setSibuk] = useState(true)
   const [menyimpan, setMenyimpan] = useState(false)
@@ -53,14 +57,19 @@ export default function Opname() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toko?.id])
 
-  // Ganti lokasi mengosongkan draf: angka toko tidak boleh tersimpan ke gudang.
+  // Ganti lokasi atau mode mengosongkan draf. Angka toko tidak boleh tersimpan
+  // ke gudang, dan "120" berarti hal yang sangat berbeda di tiap mode.
   useEffect(() => {
     setDraf({})
     setKabar(null)
-  }, [lokasi])
+  }, [lokasi, mode])
 
   const kolom = lokasi === 'toko' ? 'jumlah_toko' : 'jumlah_gudang'
-  const terisi = Object.entries(draf).filter(([, v]) => v.trim() !== '')
+  // Nol sah saat menghitung (barangnya memang habis), tapi tidak berarti
+  // apa-apa saat menambah.
+  const terisi = Object.entries(draf).filter(
+    ([, v]) => v.trim() !== '' && (mode === 'hitung' || Number(v) > 0),
+  )
 
   // Disaring di sisi aplikasi, bukan query ulang: satu toko sudah termuat
   // semua, dan angka yang sudah diketik tidak ikut hilang saat menyaring.
@@ -80,42 +89,36 @@ export default function Opname() {
     setMenyimpan(true)
     setGalat(null)
 
-    // Dua perlakuan berbeda, dan bedanya bukan cuma soal aritmatika:
+    // Bedanya bukan cuma aritmatika:
     //
-    //   120   = hasil hitung fisik. Menyetel angka mutlak DAN menandai kapan
-    //           terakhir dihitung, karena barangnya memang baru dihitung.
-    //   +20   = barang bertambah tanpa dihitung ulang. Tanggal hitung sengaja
-    //           TIDAK direset — menambah stok tidak membuat angka lama jadi
-    //           lebih terpercaya.
-    const tambah = terisi.filter(([, v]) => v.startsWith('+'))
-    const setel = terisi.filter(([, v]) => !v.startsWith('+'))
-
+    //   hitung — angka mutlak hasil menghitung barang, DAN menandai kapan
+    //            terakhir dihitung, karena barangnya memang baru dihitung.
+    //   tambah — barang bertambah tanpa dihitung ulang. Tanggal hitung sengaja
+    //            TIDAK direset: menambah stok tidak membuat angka lama jadi
+    //            lebih bisa dipercaya.
     let berhasil = 0
     try {
-      if (tambah.length > 0) {
+      if (mode === 'tambah') {
         if (lokasi === 'gudang') {
           // Barang baru dari produksi: satu transaksi, semua atau tidak sama
           // sekali, dan tercatat sebagai barang masuk — bukan koreksi.
           await catatMutasiBanyak(
             'barang_masuk',
-            tambah.map(([varianId, v]) => ({ varian_id: varianId, jumlah: Number(v.slice(1)) })),
+            terisi.map(([varianId, v]) => ({ varian_id: varianId, jumlah: Number(v) })),
           )
         } else {
           // Di toko tidak ada "barang masuk" — barang sampai ke rak lewat
           // gudang. Kelebihan di sini artinya catatannya yang meleset.
-          for (const [varianId, v] of tambah) {
-            await catatMutasi({
-              varianId,
-              jenis: 'koreksi',
-              deltaToko: Number(v.slice(1)),
-            })
+          for (const [varianId, v] of terisi) {
+            await catatMutasi({ varianId, jenis: 'koreksi', deltaToko: Number(v) })
           }
         }
-        berhasil += tambah.length
-      }
-      for (const [varianId, nilai] of setel) {
-        await hitungUlang(varianId, lokasi, Number(nilai))
-        berhasil += 1
+        berhasil = terisi.length
+      } else {
+        for (const [varianId, nilai] of terisi) {
+          await hitungUlang(varianId, lokasi, Number(nilai))
+          berhasil += 1
+        }
       }
       setKabar(`${berhasil} ukuran tersimpan.`)
       setDraf({})
@@ -129,7 +132,9 @@ export default function Opname() {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="text-lg font-semibold">Hitung fisik</h1>
+      <h1 className="text-lg font-semibold">
+        {mode === 'hitung' ? 'Hitung fisik' : 'Tambah stok'}
+      </h1>
 
       <input
         value={q}
@@ -138,13 +143,6 @@ export default function Opname() {
         placeholder="Saring: kode atau nama produk…"
         className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
       />
-
-      <p className="rounded-lg bg-stone-100 px-4 py-2.5 text-xs leading-relaxed text-stone-600">
-        Isi <strong>120</strong> kalau barangnya baru dihitung — angka diganti
-        jadi 120 dan tanggal hitungnya diperbarui. Isi <strong>+20</strong> kalau
-        barang bertambah tanpa dihitung ulang — ditambahkan ke yang tercatat, dan
-        tanggal hitungnya sengaja tidak berubah.
-      </p>
 
       <div className="flex overflow-hidden rounded-lg ring-1 ring-stone-300">
         {(
@@ -164,6 +162,54 @@ export default function Opname() {
           </button>
         ))}
       </div>
+
+      {/*
+        Modenya dipilih di sini, bukan diketik sebagai "+": keypad angka di HP
+        tidak punya tombol plus. Warnanya sengaja beda jauh supaya salah mode
+        kelihatan sebelum angkanya terlanjur masuk.
+      */}
+      <div className="flex overflow-hidden rounded-lg ring-1 ring-stone-300">
+        {(
+          [
+            ['hitung', 'Hitung ulang'],
+            ['tambah', 'Tambah'],
+          ] as const
+        ).map(([nilai, label]) => (
+          <button
+            key={nilai}
+            onClick={() => setMode(nilai)}
+            className={`flex-1 py-2 text-sm font-semibold ${
+              mode === nilai
+                ? nilai === 'tambah'
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-pink-700 text-white'
+                : 'bg-white text-stone-500'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <p
+        className={`rounded-lg px-4 py-2.5 text-xs leading-relaxed ${
+          mode === 'tambah' ? 'bg-sky-50 text-sky-900' : 'bg-stone-100 text-stone-600'
+        }`}
+      >
+        {mode === 'hitung' ? (
+          <>
+            Isi <strong>jumlah sebenarnya</strong> hasil menghitung barang. Angka
+            lama diganti, dan tanggal hitungnya diperbarui.
+          </>
+        ) : (
+          <>
+            Isi <strong>berapa yang bertambah</strong>, bukan jumlah akhirnya.
+            Angkanya ditambahkan ke yang tercatat, dan tanggal hitung sengaja
+            tidak berubah — menambah stok tidak membuat hitungan lama jadi lebih
+            bisa dipercaya.
+          </>
+        )}
+      </p>
 
       {galat && <Galat pesan={galat} />}
       {kabar && (
@@ -208,21 +254,28 @@ export default function Opname() {
                             · {umur.teks}
                           </span>
                         </span>
+                        {/* Di mode tambah, hasil akhirnya ditampilkan supaya
+                            jelas angka yang diketik itu tambahan, bukan total. */}
+                        {mode === 'tambah' && Number(draf[v.id] ?? '') > 0 && (
+                          <span className="shrink-0 text-xs font-semibold tabular-nums text-sky-700">
+                            → {sekarang + Number(draf[v.id])}
+                          </span>
+                        )}
                         <input
                           value={draf[v.id] ?? ''}
-                          onChange={(e) => {
-                            // Hanya angka, boleh diawali satu tanda +.
-                            const t = e.target.value
-                            const plus = t.startsWith('+')
-                            const angka = t.replace(/\D/g, '')
-                            setDraf({ ...draf, [v.id]: angka === '' ? '' : (plus ? '+' : '') + angka })
-                          }}
+                          onChange={(e) =>
+                            setDraf({ ...draf, [v.id]: e.target.value.replace(/\D/g, '') })
+                          }
                           inputMode="numeric"
-                          placeholder="—"
-                          aria-label={`Hasil hitung ukuran ${v.ukuran}`}
-                          className={`w-20 rounded-lg border px-2 py-2 text-center font-semibold tabular-nums outline-none ${
-                            (draf[v.id] ?? '').startsWith('+')
-                              ? 'border-sky-400 bg-sky-50 text-sky-800'
+                          placeholder={mode === 'tambah' ? '+' : '—'}
+                          aria-label={
+                            mode === 'tambah'
+                              ? `Tambahan ukuran ${v.ukuran}`
+                              : `Hasil hitung ukuran ${v.ukuran}`
+                          }
+                          className={`w-20 shrink-0 rounded-lg border px-2 py-2 text-center font-semibold tabular-nums outline-none ${
+                            mode === 'tambah'
+                              ? 'border-sky-400 bg-sky-50 text-sky-900 focus:border-sky-600'
                               : 'border-stone-300 focus:border-pink-600'
                           }`}
                         />
@@ -240,14 +293,26 @@ export default function Opname() {
         <div className="fixed inset-x-0 bottom-14 z-10 border-t border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
           <div className="mx-auto flex max-w-2xl items-center gap-3">
             <span className="flex-1 text-xs text-stone-500">
-              {terisi.length === 0 ? 'Isi angka hasil hitung' : `${terisi.length} ukuran siap`}
+              {terisi.length === 0
+                ? mode === 'hitung'
+                  ? 'Isi jumlah sebenarnya'
+                  : 'Isi berapa yang bertambah'
+                : `${terisi.length} ukuran siap · ${lokasi}`}
             </span>
             <button
               onClick={() => void simpanSemua()}
               disabled={menyimpan || terisi.length === 0}
-              className="rounded-lg bg-pink-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-pink-800 disabled:opacity-40"
+              className={`rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40 ${
+                mode === 'tambah'
+                  ? 'bg-sky-600 hover:bg-sky-700'
+                  : 'bg-pink-700 hover:bg-pink-800'
+              }`}
             >
-              {menyimpan ? 'Menyimpan…' : 'Simpan hitungan'}
+              {menyimpan
+                ? 'Menyimpan…'
+                : mode === 'hitung'
+                  ? 'Simpan hitungan'
+                  : 'Tambahkan'}
             </button>
           </div>
         </div>
