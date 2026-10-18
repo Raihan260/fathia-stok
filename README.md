@@ -72,6 +72,17 @@ User baru otomatis dapat role `staf`. Buat akunnya di Authentication → Users.
 
 ## Halaman
 
+Menu bawah berisi **empat** sasaran, sesuai seberapa sering dipakai:
+Cari · Jual · Ambil · Lainnya. Tiga yang pertama pekerjaan harian; "Lainnya"
+membuka panel berisi Riwayat nota, Hitung fisik, Kelola produk (admin saja),
+dan Keluar.
+
+Sebelumnya enam tombol berjejer, dan dua hal tercampur di situ: "Keluar" bukan
+tujuan melainkan aksi tapi dapat porsi sama dengan halaman yang dibuka puluhan
+kali sehari, dan yang dipakai seminggu sekali makan lebar yang sama dengan yang
+dipakai terus-menerus. Enam sasaran di layar 375px berarti ~62px per tombol,
+di bawah ukuran nyaman untuk jempol.
+
 Bentuk tiap halaman mengikuti bentuk pekerjaannya di toko, bukan dibagi rata
 per tombol:
 
@@ -79,7 +90,7 @@ per tombol:
 |---|---|
 | Cari | Melihat saja: harga, jumlah toko & gudang, umur hitungan, riwayat 5 pergerakan terakhir. Tidak ada tombol yang mengubah apa pun. |
 | Jual | Daftar belanja lintas model — satu pembeli reseller biasanya ambil beberapa model. Harga per baris dan total keseluruhan, nama pembeli (boleh kosong), lalu simpan sekali. Menghasilkan nota. |
-| Nota | Riwayat penjualan, dikelompokkan per tanggal. Dibuka dari halaman Jual, tidak masuk menu bawah. |
+| Nota | Riwayat penjualan, dikelompokkan per tanggal. |
 | Ambil | Memindahkan gudang ke toko. Bentuk sama dengan Jual karena juga lintas model; tanpa harga, karena tidak ada uang berpindah. |
 | Opname | Membetulkan catatan terhadap hitungan fisik, sekaligus jalur masuknya barang baru ke gudang. |
 | Kelola | Tambah/ubah produk dan ukuran, plus arsip. Admin saja. |

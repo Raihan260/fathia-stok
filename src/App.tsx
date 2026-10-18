@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import Navigasi from './components/Navigasi'
 import { useAuth } from './store/auth'
 import { useToko } from './store/toko'
 import { konfigurasiHilang } from './lib/supabase'
@@ -119,8 +120,6 @@ export default function App() {
             <Route path="/" element={<Cari />} />
             <Route path="/jual" element={<Jual />} />
             <Route path="/ambil" element={<Ambil />} />
-            {/* Nota tidak masuk menu bawah — lima tab sudah penuh, dan
-                jalannya memang dari halaman Jual. */}
             <Route path="/nota" element={<Nota />} />
             <Route path="/nota/:id" element={<NotaDetail />} />
             <Route path="/opname" element={<Opname />} />
@@ -132,47 +131,13 @@ export default function App() {
           </Routes>
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-2xl pb-[env(safe-area-inset-bottom)]">
-            <Tab ke="/" label="Cari" />
-            <Tab ke="/jual" label="Jual" />
-            <Tab ke="/ambil" label="Ambil" />
-            <Tab ke="/opname" label="Opname" />
-            {admin && <Tab ke="/kelola" label="Kelola" />}
-            {/*
-              Dipersempit dan dipisah garis supaya tidak lagi selebar tab —
-              tombol keluar selebar tab terlalu gampang kepencet. Konfirmasi
-              jadi pengaman keduanya.
-            */}
-            <button
-              onClick={() => {
-                if (confirm('Keluar dari akun ini?')) void keluarPenuh()
-              }}
-              className="w-16 shrink-0 border-l border-stone-200 py-3 text-xs font-medium text-stone-400 hover:text-stone-600"
-            >
-              Keluar
-            </button>
-          </div>
-        </nav>
+        <Navigasi
+          admin={admin}
+          namaToko={toko.nama}
+          onKeluar={() => void keluarPenuh()}
+        />
       </div>
     </BrowserRouter>
   )
 }
 
-function Tab({ ke, label }: { ke: string; label: string }) {
-  return (
-    <NavLink
-      to={ke}
-      end={ke === '/'}
-      // min-w-0 + truncate: lima tab di layar 375px tidak boleh saling
-      // mendorong sampai tombol Keluar terlempar keluar layar.
-      className={({ isActive }) =>
-        `min-w-0 flex-1 truncate px-1 py-3 text-center text-xs font-semibold ${
-          isActive ? 'text-pink-700' : 'text-stone-400'
-        }`
-      }
-    >
-      {label}
-    </NavLink>
-  )
-}
