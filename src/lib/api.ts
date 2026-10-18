@@ -122,14 +122,22 @@ export async function catatMutasi(arg: {
  * tersimpan separuh lebih merepotkan daripada yang gagal seluruhnya.
  */
 export async function catatMutasiBanyak(
-  jenis: 'jual' | 'pindah_ke_toko' | 'barang_masuk',
+  jenis: 'jual' | 'pindah_ke_toko' | 'barang_masuk' | 'koreksi',
   baris: { varian_id: string; jumlah: number }[],
-  catatan?: string | null,
+  opsi?: {
+    catatan?: string | null
+    /** Wajib untuk 'koreksi' — jenis itu tidak punya arah bawaan. */
+    lokasi?: Lokasi
+    /** 'koreksi' saja: true berarti mengurangi. */
+    kurang?: boolean
+  },
 ): Promise<number> {
   const { data, error } = await supabase.rpc('catat_mutasi_banyak', {
     p_jenis: jenis,
     p_baris: baris,
-    p_catatan: catatan ?? null,
+    p_catatan: opsi?.catatan ?? null,
+    p_lokasi: opsi?.lokasi ?? null,
+    p_kurang: opsi?.kurang ?? false,
   })
   if (error) throw error
   return data as number

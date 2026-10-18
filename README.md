@@ -89,7 +89,7 @@ Barangnya dibuat sendiri, masuk sedikit-sedikit. Tidak ada kiriman yang datang
 sekali banyak, jadi tidak ada "kejadian barang masuk" untuk dicatat — yang ada
 cuma stok gudang yang pelan-pelan bertambah. Itu masuk lewat Opname.
 
-### Dua mode di Opname
+### Tiga mode di Opname
 
 - **Hitung ulang** — angka yang diisi adalah jumlah sebenarnya hasil menghitung
   barang. Menyetel angka mutlak **dan** memperbarui tanggal hitung.
@@ -99,6 +99,10 @@ cuma stok gudang yang pelan-pelan bertambah. Itu masuk lewat Opname.
   Di gudang tercatat sebagai `barang_masuk`, di toko sebagai `koreksi` — barang
   tidak pernah sampai ke rak tanpa lewat gudang, jadi kelebihan di toko artinya
   catatannya yang meleset.
+- **Kurangi** — barang berkurang di luar penjualan: rusak, hilang, dipakai buat
+  contoh. Tercatat sebagai `koreksi`. Penjualan **tidak boleh** lewat sini —
+  kalau terjadi, riwayat penjualannya jadi bohong dan angka "ukuran mana yang
+  laku" ikut salah. Keterangan di halamannya menyebut itu.
 
 Stok gudang per ukuran ada di kisaran ratusan, jadi tanpa mode Tambah tiap
 penambahan berarti menghitung ulang ratusan potong atau menjumlah di kepala.

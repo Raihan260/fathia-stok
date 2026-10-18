@@ -1,11 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  catatMutasi,
-  catatMutasiBanyak,
-  hitungUlang,
-  pesanGalat,
-  produkPerKategori,
-} from '../lib/api'
+import { catatMutasiBanyak, hitungUlang, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Lokasi, Produk } from '../lib/types'
 import { pcs, statusDari, umurHitung } from '../lib/types'
@@ -19,7 +13,28 @@ import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
  * menghitung barang, baru disimpan sekali di akhir — menyimpan per baris
  * berarti menunggu jaringan di tengah hitungan.
  */
-type Mode = 'hitung' | 'tambah'
+type Mode = 'hitung' | 'tambah' | 'kurang'
+
+const GAYA_MODE: Record<Mode, { judul: string; tombol: string; aktif: string; isian: string }> = {
+  hitung: {
+    judul: 'Hitung fisik',
+    tombol: 'Simpan hitungan',
+    aktif: 'bg-pink-700 text-white',
+    isian: 'border-stone-300 focus:border-pink-600',
+  },
+  tambah: {
+    judul: 'Tambah stok',
+    tombol: 'Tambahkan',
+    aktif: 'bg-sky-600 text-white',
+    isian: 'border-sky-400 bg-sky-50 text-sky-900 focus:border-sky-600',
+  },
+  kurang: {
+    judul: 'Kurangi stok',
+    tombol: 'Kurangi',
+    aktif: 'bg-amber-600 text-white',
+    isian: 'border-amber-400 bg-amber-50 text-amber-900 focus:border-amber-600',
+  },
+}
 
 export default function Opname() {
   const toko = useToko((s) => s.toko)
@@ -96,24 +111,30 @@ export default function Opname() {
     //   tambah — barang bertambah tanpa dihitung ulang. Tanggal hitung sengaja
     //            TIDAK direset: menambah stok tidak membuat angka lama jadi
     //            lebih bisa dipercaya.
+    //   kurang — barang berkurang di luar penjualan: rusak, hilang, dipakai
+    //            buat contoh. Penjualan TIDAK boleh lewat sini, kalau tidak
+    //            riwayat penjualannya jadi bohong.
+    const baris = terisi.map(([varianId, v]) => ({
+      varian_id: varianId,
+      jumlah: Number(v),
+    }))
+
     let berhasil = 0
     try {
-      if (mode === 'tambah') {
-        if (lokasi === 'gudang') {
-          // Barang baru dari produksi: satu transaksi, semua atau tidak sama
-          // sekali, dan tercatat sebagai barang masuk — bukan koreksi.
-          await catatMutasiBanyak(
-            'barang_masuk',
-            terisi.map(([varianId, v]) => ({ varian_id: varianId, jumlah: Number(v) })),
-          )
-        } else {
-          // Di toko tidak ada "barang masuk" — barang sampai ke rak lewat
-          // gudang. Kelebihan di sini artinya catatannya yang meleset.
-          for (const [varianId, v] of terisi) {
-            await catatMutasi({ varianId, jenis: 'koreksi', deltaToko: Number(v) })
-          }
-        }
-        berhasil = terisi.length
+      if (mode === 'tambah' && lokasi === 'gudang') {
+        // Barang baru dari produksi: tercatat sebagai barang masuk, bukan
+        // koreksi, supaya nanti bisa dibedakan dari catatan yang meleset.
+        await catatMutasiBanyak('barang_masuk', baris)
+        berhasil = baris.length
+      } else if (mode === 'tambah' || mode === 'kurang') {
+        // Di toko tidak ada "barang masuk" — barang sampai ke rak lewat gudang,
+        // jadi kelebihan di sana artinya catatannya yang meleset. Pengurangan
+        // di mana pun juga koreksi: kejadiannya tidak terlacak sistem.
+        await catatMutasiBanyak('koreksi', baris, {
+          lokasi,
+          kurang: mode === 'kurang',
+        })
+        berhasil = baris.length
       } else {
         for (const [varianId, nilai] of terisi) {
           await hitungUlang(varianId, lokasi, Number(nilai))
@@ -132,9 +153,7 @@ export default function Opname() {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="text-lg font-semibold">
-        {mode === 'hitung' ? 'Hitung fisik' : 'Tambah stok'}
-      </h1>
+      <h1 className="text-lg font-semibold">{GAYA_MODE[mode].judul}</h1>
 
       <input
         value={q}
@@ -173,17 +192,14 @@ export default function Opname() {
           [
             ['hitung', 'Hitung ulang'],
             ['tambah', 'Tambah'],
+            ['kurang', 'Kurangi'],
           ] as const
         ).map(([nilai, label]) => (
           <button
             key={nilai}
             onClick={() => setMode(nilai)}
             className={`flex-1 py-2 text-sm font-semibold ${
-              mode === nilai
-                ? nilai === 'tambah'
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-pink-700 text-white'
-                : 'bg-white text-stone-500'
+              mode === nilai ? GAYA_MODE[nilai].aktif : 'bg-white text-stone-500'
             }`}
           >
             {label}
@@ -193,20 +209,33 @@ export default function Opname() {
 
       <p
         className={`rounded-lg px-4 py-2.5 text-xs leading-relaxed ${
-          mode === 'tambah' ? 'bg-sky-50 text-sky-900' : 'bg-stone-100 text-stone-600'
+          mode === 'tambah'
+            ? 'bg-sky-50 text-sky-900'
+            : mode === 'kurang'
+              ? 'bg-amber-50 text-amber-900'
+              : 'bg-stone-100 text-stone-600'
         }`}
       >
-        {mode === 'hitung' ? (
+        {mode === 'hitung' && (
           <>
             Isi <strong>jumlah sebenarnya</strong> hasil menghitung barang. Angka
             lama diganti, dan tanggal hitungnya diperbarui.
           </>
-        ) : (
+        )}
+        {mode === 'tambah' && (
           <>
             Isi <strong>berapa yang bertambah</strong>, bukan jumlah akhirnya.
             Angkanya ditambahkan ke yang tercatat, dan tanggal hitung sengaja
             tidak berubah — menambah stok tidak membuat hitungan lama jadi lebih
             bisa dipercaya.
+          </>
+        )}
+        {mode === 'kurang' && (
+          <>
+            Isi <strong>berapa yang berkurang</strong> di luar penjualan: barang
+            rusak, hilang, atau dipakai buat contoh.{' '}
+            <strong>Barang terjual jangan dicatat di sini</strong> — pakai
+            halaman Jual, supaya riwayat penjualannya tetap benar.
           </>
         )}
       </p>
@@ -254,30 +283,38 @@ export default function Opname() {
                             · {umur.teks}
                           </span>
                         </span>
-                        {/* Di mode tambah, hasil akhirnya ditampilkan supaya
-                            jelas angka yang diketik itu tambahan, bukan total. */}
-                        {mode === 'tambah' && Number(draf[v.id] ?? '') > 0 && (
-                          <span className="shrink-0 text-xs font-semibold tabular-nums text-sky-700">
-                            → {sekarang + Number(draf[v.id])}
-                          </span>
-                        )}
+                        {/* Hasil akhirnya ditampilkan supaya jelas angka yang
+                            diketik itu selisih, bukan total. Merah kalau
+                            hasilnya minus — ditolak database, tapi lebih baik
+                            ketahuan sebelum menekan simpan. */}
+                        {mode !== 'hitung' &&
+                          Number(draf[v.id] ?? '') > 0 &&
+                          (() => {
+                            const n = Number(draf[v.id])
+                            const akhir = mode === 'kurang' ? sekarang - n : sekarang + n
+                            return (
+                              <span
+                                className={`shrink-0 text-xs font-semibold tabular-nums ${
+                                  akhir < 0
+                                    ? 'text-rose-600'
+                                    : mode === 'kurang'
+                                      ? 'text-amber-700'
+                                      : 'text-sky-700'
+                                }`}
+                              >
+                                → {akhir}
+                              </span>
+                            )
+                          })()}
                         <input
                           value={draf[v.id] ?? ''}
                           onChange={(e) =>
                             setDraf({ ...draf, [v.id]: e.target.value.replace(/\D/g, '') })
                           }
                           inputMode="numeric"
-                          placeholder={mode === 'tambah' ? '+' : '—'}
-                          aria-label={
-                            mode === 'tambah'
-                              ? `Tambahan ukuran ${v.ukuran}`
-                              : `Hasil hitung ukuran ${v.ukuran}`
-                          }
-                          className={`w-20 shrink-0 rounded-lg border px-2 py-2 text-center font-semibold tabular-nums outline-none ${
-                            mode === 'tambah'
-                              ? 'border-sky-400 bg-sky-50 text-sky-900 focus:border-sky-600'
-                              : 'border-stone-300 focus:border-pink-600'
-                          }`}
+                          placeholder={mode === 'hitung' ? '—' : mode === 'kurang' ? '−' : '+'}
+                          aria-label={`${GAYA_MODE[mode].judul} ukuran ${v.ukuran}`}
+                          className={`w-20 shrink-0 rounded-lg border px-2 py-2 text-center font-semibold tabular-nums outline-none ${GAYA_MODE[mode].isian}`}
                         />
                       </li>
                     )
@@ -296,23 +333,23 @@ export default function Opname() {
               {terisi.length === 0
                 ? mode === 'hitung'
                   ? 'Isi jumlah sebenarnya'
-                  : 'Isi berapa yang bertambah'
+                  : mode === 'tambah'
+                    ? 'Isi berapa yang bertambah'
+                    : 'Isi berapa yang berkurang'
                 : `${terisi.length} ukuran siap · ${lokasi}`}
             </span>
             <button
               onClick={() => void simpanSemua()}
               disabled={menyimpan || terisi.length === 0}
-              className={`rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40 ${
-                mode === 'tambah'
-                  ? 'bg-sky-600 hover:bg-sky-700'
-                  : 'bg-pink-700 hover:bg-pink-800'
+              className={`rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-40 ${GAYA_MODE[mode].aktif} ${
+                mode === 'kurang'
+                  ? 'hover:bg-amber-700'
+                  : mode === 'tambah'
+                    ? 'hover:bg-sky-700'
+                    : 'hover:bg-pink-800'
               }`}
             >
-              {menyimpan
-                ? 'Menyimpan…'
-                : mode === 'hitung'
-                  ? 'Simpan hitungan'
-                  : 'Tambahkan'}
+              {menyimpan ? 'Menyimpan…' : GAYA_MODE[mode].tombol}
             </button>
           </div>
         </div>
