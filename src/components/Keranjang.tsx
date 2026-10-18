@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { cariProduk, catatMutasiBanyak, pesanGalat, produkPerKategori } from '../lib/api'
+import { cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Lokasi, Produk, Varian } from '../lib/types'
 import { pcs, rupiah, statusDari } from '../lib/types'
@@ -24,25 +24,37 @@ export interface BarisKeranjang {
 
 export default function Keranjang({
   judul,
-  jenis,
   sumber,
   tampilkanHarga,
   labelSimpan,
   petunjuk,
+  pakaiPembeli = false,
+  saranPembeli = [],
+  onSimpan,
+  atas,
 }: {
   judul: string
-  jenis: 'jual' | 'pindah_ke_toko'
   /** Stok mana yang berkurang — yang ditampilkan dan dijadikan patokan. */
   sumber: Lokasi
   tampilkanHarga: boolean
   labelSimpan: string
   petunjuk: string
+  pakaiPembeli?: boolean
+  saranPembeli?: string[]
+  /** Mengembalikan kalimat yang ditampilkan setelah berhasil. */
+  onSimpan: (
+    baris: { varian_id: string; jumlah: number }[],
+    pembeli: string | null,
+  ) => Promise<string>
+  /** Slot di bawah judul — dipakai halaman Jual untuk tautan riwayat nota. */
+  atas?: React.ReactNode
 }) {
   const toko = useToko((s) => s.toko)
   const [q, setQ] = useState('')
   const [hasil, setHasil] = useState<Produk[]>([])
   const [buka, setBuka] = useState<string | null>(null)
   const [keranjang, setKeranjang] = useState<BarisKeranjang[]>([])
+  const [pembeli, setPembeli] = useState('')
   const [sibuk, setSibuk] = useState(false)
   const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
@@ -121,12 +133,13 @@ export default function Keranjang({
     setMenyimpan(true)
     setGalat(null)
     try {
-      await catatMutasiBanyak(
-        jenis,
+      const pesan = await onSimpan(
         keranjang.map((b) => ({ varian_id: b.varianId, jumlah: b.jumlah })),
+        pembeli.trim() || null,
       )
-      setKabar(`${keranjang.length} baris tersimpan.`)
+      setKabar(pesan)
       setKeranjang([])
+      setPembeli('')
       setQ('')
       // Muat ulang supaya stok di layar ikut turun.
       if (toko) setHasil(await produkPerKategori(toko.id))
@@ -142,7 +155,10 @@ export default function Keranjang({
 
   return (
     <div className="space-y-4 pb-40">
-      <h1 className="text-lg font-semibold">{judul}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold">{judul}</h1>
+        {atas}
+      </div>
 
       <input
         ref={kotak}
@@ -223,6 +239,25 @@ export default function Keranjang({
                 </li>
               ))}
             </ul>
+
+            {/* Nama pembeli di sini, bukan di atas: diisi saat pesanan sudah
+                lengkap dan tangan tidak lagi sibuk memilih barang. */}
+            {pakaiPembeli && (
+              <div className="mt-2">
+                <input
+                  value={pembeli}
+                  onChange={(e) => setPembeli(e.target.value)}
+                  list="saran-pembeli"
+                  placeholder="Nama pembeli (boleh kosong)"
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pink-600"
+                />
+                <datalist id="saran-pembeli">
+                  {saranPembeli.map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              </div>
+            )}
 
             <div className="mt-2 flex items-center gap-3 border-t border-stone-200 pt-2">
               <span className="flex-1 text-xs text-stone-500">

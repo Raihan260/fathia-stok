@@ -78,7 +78,8 @@ per tombol:
 | Halaman | Isi |
 |---|---|
 | Cari | Melihat saja: harga, jumlah toko & gudang, umur hitungan, riwayat 5 pergerakan terakhir. Tidak ada tombol yang mengubah apa pun. |
-| Jual | Daftar belanja lintas model — satu pembeli reseller biasanya ambil beberapa model. Harga per baris dan total keseluruhan, lalu simpan sekali. |
+| Jual | Daftar belanja lintas model — satu pembeli reseller biasanya ambil beberapa model. Harga per baris dan total keseluruhan, nama pembeli (boleh kosong), lalu simpan sekali. Menghasilkan nota. |
+| Nota | Riwayat penjualan, dikelompokkan per tanggal. Dibuka dari halaman Jual, tidak masuk menu bawah. |
 | Ambil | Memindahkan gudang ke toko. Bentuk sama dengan Jual karena juga lintas model; tanpa harga, karena tidak ada uang berpindah. |
 | Opname | Membetulkan catatan terhadap hitungan fisik, sekaligus jalur masuknya barang baru ke gudang. |
 | Kelola | Tambah/ubah produk dan ukuran, plus arsip. Admin saja. |
@@ -112,6 +113,27 @@ tidak punya tombol plus sama sekali. Ganti mode mengosongkan isian yang sedang
 diketik, karena angka yang sama berarti hal yang sangat berbeda di tiap mode.
 Di mode Tambah, hasil akhirnya ditampilkan di samping kotak isian (`→ 240`)
 supaya jelas yang diketik itu tambahan, bukan total.
+
+### Nota menyimpan salinan, bukan tautan
+
+`transaksi_item` menyimpan **salinan** kode, nama, ukuran, dan harga saat
+transaksi terjadi. Kalau notanya hanya menunjuk ke `varian`, menaikkan harga
+bulan depan ikut mengubah nota bulan lalu — padahal pembelinya tidak membayar
+segitu. Nota yang berubah sendiri bukan nota.
+
+`varian_id` tetap disimpan sebagai penghubung, tapi boleh menjadi null kalau
+produknya kelak benar-benar dihapus: notanya tetap utuh dan terbaca.
+
+Harga disalin di sisi database oleh `catat_penjualan()`, bukan dikirim dari
+aplikasi, supaya nota tidak bisa berisi harga yang dikarang.
+
+Nomor nota per toko per hari (`181026-003`). Penomorannya memakai
+`pg_advisory_xact_lock` pada (toko, tanggal), supaya dua orang yang menyimpan
+bersamaan tidak dapat nomor kembar — dan `max(urut)+1`, bukan `count(*)+1`,
+supaya nomor tidak terpakai ulang kalau suatu saat ada nota yang terhapus.
+
+Belum ada retur dan pembatalan — disengaja, supaya tidak menambah kerumitan
+sebelum terbukti perlu.
 
 ### Satu pesanan = satu transaksi
 

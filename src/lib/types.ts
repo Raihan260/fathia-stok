@@ -47,6 +47,43 @@ export interface Mutasi {
   created_at: string
 }
 
+/**
+ * Baris nota menyimpan SALINAN kode, nama, ukuran, dan harga saat transaksi
+ * terjadi — bukan menunjuk ke produk. Harga yang naik bulan depan tidak boleh
+ * mengubah nota bulan lalu.
+ */
+export interface TransaksiItem {
+  id: string
+  kode: string
+  nama: string
+  ukuran: string
+  harga: number
+  jumlah: number
+  subtotal: number
+}
+
+export interface Transaksi {
+  id: string
+  nomor: string
+  tanggal: string
+  pembeli: string | null
+  catatan: string | null
+  total: number
+  created_at: string
+  transaksi_item?: TransaksiItem[]
+}
+
+export const tanggalPanjang = (iso: string) =>
+  new Date(iso).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+export const jamSingkat = (iso: string) =>
+  new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+
 export const LABEL_MUTASI: Record<JenisMutasi, string> = {
   jual: 'Terjual',
   barang_masuk: 'Barang masuk',

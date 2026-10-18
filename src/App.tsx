@@ -10,6 +10,7 @@ import PilihToko from './pages/PilihToko'
 import Cari from './pages/Cari'
 import Jual from './pages/Jual'
 import Ambil from './pages/Ambil'
+import Nota, { NotaDetail } from './pages/Nota'
 import Kelola from './pages/Kelola'
 import Opname from './pages/Opname'
 import { Galat, Spinner } from './components/ui'
@@ -118,6 +119,10 @@ export default function App() {
             <Route path="/" element={<Cari />} />
             <Route path="/jual" element={<Jual />} />
             <Route path="/ambil" element={<Ambil />} />
+            {/* Nota tidak masuk menu bawah — lima tab sudah penuh, dan
+                jalannya memang dari halaman Jual. */}
+            <Route path="/nota" element={<Nota />} />
+            <Route path="/nota/:id" element={<NotaDetail />} />
             <Route path="/opname" element={<Opname />} />
             <Route
               path="/kelola"

@@ -1,5 +1,14 @@
 import { supabase } from './supabase'
-import type { JenisMutasi, Kategori, Lokasi, Mutasi, Produk, Role, Varian } from './types'
+import type {
+  JenisMutasi,
+  Kategori,
+  Lokasi,
+  Mutasi,
+  Produk,
+  Role,
+  Transaksi,
+  Varian,
+} from './types'
 import { urutanUkuran } from './types'
 
 const PILIH_PRODUK = '*, kategori:kategori_id(*), varian(*)'
@@ -158,6 +167,68 @@ export async function hitungUlang(
   })
   if (error) throw error
   return data as Varian
+}
+
+/**
+ * Mencatat satu penjualan beserta notanya dalam satu transaksi: stok turun,
+ * mutasi tercatat, nota dan baris-barisnya terbentuk — semua atau tidak sama
+ * sekali. Harga disalin ke notanya di sisi database, bukan dikirim dari sini,
+ * supaya nota tidak bisa berisi harga yang dikarang.
+ */
+export async function catatPenjualan(
+  kategoriId: string,
+  baris: { varian_id: string; jumlah: number }[],
+  pembeli?: string | null,
+  catatan?: string | null,
+): Promise<{ id: string; nomor: string; tanggal: string; total: number; baris: number }> {
+  const { data, error } = await supabase.rpc('catat_penjualan', {
+    p_kategori_id: kategoriId,
+    p_baris: baris,
+    p_pembeli: pembeli ?? null,
+    p_catatan: catatan ?? null,
+  })
+  if (error) throw error
+  return data as { id: string; nomor: string; tanggal: string; total: number; baris: number }
+}
+
+export async function ambilTransaksi(kategoriId: string, batas = 100): Promise<Transaksi[]> {
+  const { data, error } = await supabase
+    .from('transaksi')
+    .select('*')
+    .eq('kategori_id', kategoriId)
+    .order('created_at', { ascending: false })
+    .limit(batas)
+  if (error) throw error
+  return (data ?? []) as Transaksi[]
+}
+
+export async function ambilTransaksiSatu(id: string): Promise<Transaksi | null> {
+  const { data, error } = await supabase
+    .from('transaksi')
+    .select('*, transaksi_item(*)')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return (data as Transaksi | null) ?? null
+}
+
+/**
+ * Nama pembeli yang pernah dipakai, untuk saran saat mengetik. Gunanya bukan
+ * kerapian: tanpa ini "Bu Ani", "bu ani", dan "Ani" jadi tiga orang berbeda,
+ * dan data pembelinya tidak berguna sejak awal.
+ */
+export async function ambilNamaPembeli(kategoriId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('transaksi')
+    .select('pembeli')
+    .eq('kategori_id', kategoriId)
+    .not('pembeli', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(300)
+  if (error) throw error
+  const unik = new Set<string>()
+  for (const r of data ?? []) if (r.pembeli) unik.add(r.pembeli as string)
+  return [...unik]
 }
 
 export async function ambilMutasi(varianId: string, batas = 5): Promise<Mutasi[]> {
