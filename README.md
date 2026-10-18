@@ -109,4 +109,21 @@ menyusul.**
 
 Netlify, build command `npm run build`, publish directory `dist`.
 Set `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` di site settings.
+
+Penting: Vite menanamkan nilai `VITE_*` ke dalam bundle **saat build**, bukan
+dibaca saat halaman dibuka. Dua akibatnya:
+
+- Kalau env var belum di-set waktu build jalan, `konfigurasiHilang` jadi
+  konstanta `true` dan minifier membuang seluruh aplikasi — yang ter-deploy
+  cuma banner peringatan. Set env var dulu, baru deploy.
+- Mengubah env var tidak berpengaruh sampai site di-build ulang.
+
+Konsekuensinya untuk pengembangan: `npm run build` tanpa `.env` tidak benar-benar
+mengompilasi aplikasinya. Untuk memeriksa build secara utuh tanpa kredensial
+asli, isi env var dengan nilai palsu:
+
+```bash
+VITE_SUPABASE_URL=https://dummy.supabase.co \
+VITE_SUPABASE_ANON_KEY=sb_publishable_dummy npm run build
+```
 Rencana subdomain: `stok.fathiakids.com`.

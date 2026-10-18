@@ -6,6 +6,7 @@ import {
   hitungUlang,
   lokasiStokKurang,
   pesanGalat,
+  produkPerKategori,
 } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Lokasi, Mutasi, Produk, Varian } from '../lib/types'
@@ -28,23 +29,36 @@ export default function Cari() {
     kotak.current?.focus()
   }, [])
 
+  /**
+   * Kotak kosong = tampilkan semua produk toko ini. Layar kosong yang menunggu
+   * diketik tidak berguna buat orang yang cuma mau lihat apa saja yang ada.
+   * Pencarian ditunda 250 ms supaya tidak menembak query tiap ketukan huruf;
+   * daftar penuh dimuat langsung karena tidak ada yang sedang diketik.
+   */
   useEffect(() => {
-    if (q.trim() === '' || !toko) {
+    if (!toko) {
       setHasil([])
-      setGalat(null)
       return
     }
+    const kosong = q.trim() === ''
     setSibuk(true)
-    const t = setTimeout(async () => {
+
+    async function muat() {
       try {
-        setHasil(await cariProduk(q, toko.id))
+        setHasil(kosong ? await produkPerKategori(toko!.id) : await cariProduk(q, toko!.id))
         setGalat(null)
       } catch (err) {
         setGalat(pesanGalat(err))
       } finally {
         setSibuk(false)
       }
-    }, 250)
+    }
+
+    if (kosong) {
+      void muat()
+      return
+    }
+    const t = setTimeout(() => void muat(), 250)
     return () => clearTimeout(t)
   }, [q, toko?.id])
 
@@ -74,11 +88,24 @@ export default function Cari() {
       </div>
 
       {galat && <Galat pesan={galat} />}
-      {sibuk && hasil.length === 0 && <Spinner teks="Mencari…" />}
-      {!sibuk && q.trim() !== '' && hasil.length === 0 && !galat && (
-        <Kosong teks={`Tidak ada produk yang cocok dengan "${q}".`} />
+      {sibuk && hasil.length === 0 && (
+        <Spinner teks={q.trim() === '' ? 'Memuat…' : 'Mencari…'} />
       )}
-      {q.trim() === '' && <Kosong teks="Ketik kode dari hangtag, atau sebagian nama produk." />}
+      {!sibuk && hasil.length === 0 && !galat && (
+        <Kosong
+          teks={
+            q.trim() === ''
+              ? `Belum ada produk di ${toko?.nama ?? 'toko ini'}.`
+              : `Tidak ada produk yang cocok dengan "${q}".`
+          }
+        />
+      )}
+
+      {hasil.length > 0 && q.trim() === '' && (
+        <p className="text-xs text-stone-400">
+          {hasil.length} produk · ketik untuk menyaring
+        </p>
+      )}
 
       <div className="space-y-4">
         {hasil.map((p) => (
