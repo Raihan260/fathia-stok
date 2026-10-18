@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { cariProduk, setStatus } from '../lib/api'
+import { cariProduk, pesanGalat, setStatus } from '../lib/api'
 import type { Produk, StatusStok, Varian } from '../lib/types'
 import { rupiah } from '../lib/types'
 import { Galat, Kosong, Spinner, StatusToggle } from '../components/ui'
+
+type KolomStok = 'stok_toko' | 'stok_gudang'
 
 /**
  * Halaman utama — 90% pemakaian ada di sini.
@@ -40,13 +42,30 @@ export default function Cari() {
     return () => clearTimeout(t)
   }, [q])
 
-  function perbaruiVarian(varianId: string, kolom: keyof Varian, nilai: StatusStok) {
+  function perbaruiVarian(varianId: string, kolom: KolomStok, nilai: StatusStok) {
     setHasil((lama) =>
       lama.map((p) => ({
         ...p,
         varian: p.varian.map((v) => (v.id === varianId ? { ...v, [kolom]: nilai } : v)),
       })),
     )
+  }
+
+  /**
+   * Ubah dulu di layar supaya terasa seketika, baru simpan. Kalau gagal —
+   * misalnya staf mencoba sesuatu yang bukan haknya — kembalikan ke nilai
+   * semula, jangan biarkan layar menampilkan status yang tidak tersimpan.
+   */
+  async function ubahStatus(v: Varian, kolom: KolomStok, nilai: StatusStok) {
+    const sebelum = v[kolom]
+    perbaruiVarian(v.id, kolom, nilai)
+    try {
+      await setStatus(v.id, kolom, nilai)
+      setGalat(null)
+    } catch (err) {
+      perbaruiVarian(v.id, kolom, sebelum)
+      setGalat(pesanGalat(err))
+    }
   }
 
   return (
@@ -74,7 +93,7 @@ export default function Cari() {
 
       <div className="space-y-4">
         {hasil.map((p) => (
-          <KartuProduk key={p.id} produk={p} onUbah={perbaruiVarian} />
+          <KartuProduk key={p.id} produk={p} onUbah={ubahStatus} />
         ))}
       </div>
     </div>
@@ -86,7 +105,7 @@ function KartuProduk({
   onUbah,
 }: {
   produk: Produk
-  onUbah: (varianId: string, kolom: keyof Varian, nilai: StatusStok) => void
+  onUbah: (v: Varian, kolom: KolomStok, nilai: StatusStok) => void
 }) {
   const [buka, setBuka] = useState<string | null>(null)
 
@@ -124,18 +143,12 @@ function KartuProduk({
                 <BarisUbah
                   label="Stok toko"
                   nilai={v.stok_toko}
-                  onPilih={async (s) => {
-                    onUbah(v.id, 'stok_toko', s)
-                    await setStatus(v.id, 'stok_toko', s)
-                  }}
+                  onPilih={(s) => onUbah(v, 'stok_toko', s)}
                 />
                 <BarisUbah
                   label="Stok gudang"
                   nilai={v.stok_gudang}
-                  onPilih={async (s) => {
-                    onUbah(v.id, 'stok_gudang', s)
-                    await setStatus(v.id, 'stok_gudang', s)
-                  }}
+                  onPilih={(s) => onUbah(v, 'stok_gudang', s)}
                 />
               </div>
             )}

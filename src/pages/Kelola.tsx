@@ -4,6 +4,7 @@ import {
   cariProduk,
   hapusProduk,
   hapusVarian,
+  pesanGalat,
   produkPerKategori,
   simpanProduk,
   simpanVarian,
@@ -38,7 +39,7 @@ export default function Kelola() {
       setDaftar(q.trim() ? await cariProduk(q) : await produkPerKategori(pilihKategori))
       setGalat(null)
     } catch (e) {
-      setGalat(e instanceof Error ? e.message : 'Gagal memuat.')
+      setGalat(pesanGalat(e))
     } finally {
       setSibuk(false)
     }
@@ -192,7 +193,7 @@ function FormProduk({
       }
       onSelesai()
     } catch (e) {
-      setGalat(e instanceof Error ? e.message : 'Gagal menyimpan.')
+      setGalat(pesanGalat(e))
       setSibuk(false)
     }
   }

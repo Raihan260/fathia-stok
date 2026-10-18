@@ -23,6 +23,33 @@ sebenarnya ("ini masih ada atau tidak") dan tahan kalau sesekali lupa update.
   ukuran. Ukuran disimpan sebagai teks bebas (`1`, `5`, `S`, `XL`, `All size`)
   dengan kolom `urutan` supaya tampilannya urut benar, bukan alfabetis.
 
+## Peran: admin dan staf
+
+| | admin | staf |
+|---|---|---|
+| Lihat harga & stok | ya | ya |
+| Ubah status stok | ya | ya |
+| Tambah/ubah/hapus produk & ukuran | ya | tidak |
+| Ubah harga | ya | tidak |
+
+RLS Postgres bekerja per baris, bukan per kolom, jadi aturan "staf hanya boleh
+mengubah kolom status" tidak bisa ditulis sebagai policy. Policy `update` pada
+`varian` dibuat terbuka, lalu trigger `jaga_kolom_varian` menolak perubahan
+`harga_grosir`, `ukuran`, `urutan`, dan `produk_id` oleh non-admin. Karena di
+level database, batasan ini tetap berlaku walau API dipanggil langsung tanpa
+lewat aplikasi.
+
+Tabel `profil` sengaja hanya punya policy SELECT, supaya staf tidak bisa
+menaikkan perannya sendiri. Konsekuensinya, role hanya bisa diubah lewat SQL
+atau dashboard Supabase:
+
+```sql
+update profil set role = 'admin'
+where id = (select id from auth.users where email = 'orang@contoh.com');
+```
+
+User baru otomatis dapat role `staf`. Buat akunnya di Authentication → Users.
+
 ## Halaman
 
 | Halaman | Isi |

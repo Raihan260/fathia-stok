@@ -1,5 +1,8 @@
 export type StatusStok = 'ada' | 'menipis' | 'habis'
 
+/** admin: semua. staf: hanya boleh mengubah status stok. */
+export type Role = 'admin' | 'staf'
+
 export const SEMUA_STATUS: StatusStok[] = ['ada', 'menipis', 'habis']
 
 export interface Kategori {

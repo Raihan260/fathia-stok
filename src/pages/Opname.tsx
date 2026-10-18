@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ambilKategori, produkPerKategori, setStatus } from '../lib/api'
-import type { Kategori, Produk, StatusStok } from '../lib/types'
+import { ambilKategori, pesanGalat, produkPerKategori, setStatus } from '../lib/api'
+import type { Kategori, Produk, StatusStok, Varian } from '../lib/types'
 import { Galat, Kosong, Spinner, StatusToggle } from '../components/ui'
 
 /**
@@ -36,17 +36,25 @@ export default function Opname() {
       .finally(() => setSibuk(false))
   }, [pilih])
 
-  async function ubah(varianId: string, nilai: StatusStok) {
+  function tulisDiLayar(varianId: string, nilai: StatusStok) {
     setDaftar((lama) =>
       lama.map((p) => ({
         ...p,
         varian: p.varian.map((v) => (v.id === varianId ? { ...v, [mode]: nilai } : v)),
       })),
     )
+  }
+
+  /** Ubah di layar dulu, kembalikan kalau penyimpanan gagal. */
+  async function ubah(varian: Varian, nilai: StatusStok) {
+    const sebelum = varian[mode]
+    tulisDiLayar(varian.id, nilai)
     try {
-      await setStatus(varianId, mode, nilai)
+      await setStatus(varian.id, mode, nilai)
+      setGalat(null)
     } catch (e) {
-      setGalat(e instanceof Error ? e.message : 'Gagal menyimpan perubahan.')
+      tulisDiLayar(varian.id, sebelum)
+      setGalat(pesanGalat(e))
     }
   }
 
@@ -108,7 +116,7 @@ export default function Opname() {
                 {p.varian.map((v) => (
                   <li key={v.id} className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-stone-700">{v.ukuran}</span>
-                    <StatusToggle nilai={v[mode]} onPilih={(s) => ubah(v.id, s)} />
+                    <StatusToggle nilai={v[mode]} onPilih={(s) => void ubah(v, s)} />
                   </li>
                 ))}
               </ul>

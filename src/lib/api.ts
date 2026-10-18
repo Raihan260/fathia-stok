@@ -1,8 +1,31 @@
 import { supabase } from './supabase'
-import type { Kategori, Produk, StatusStok, Varian } from './types'
+import type { Kategori, Produk, Role, StatusStok, Varian } from './types'
 import { urutanUkuran } from './types'
 
 const PILIH_PRODUK = '*, kategori:kategori_id(*), varian(*)'
+
+/**
+ * Role user yang sedang login. Kalau gagal dibaca, anggap 'staf' — izin paling
+ * sempit, supaya kegagalan jaringan tidak pernah membuka akses admin.
+ */
+export async function ambilRole(userId: string): Promise<Role> {
+  const { data } = await supabase
+    .from('profil')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+  return data?.role === 'admin' ? 'admin' : 'staf'
+}
+
+/** Terjemahkan galat database jadi kalimat yang berguna buat orang di toko. */
+export function pesanGalat(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e)
+  if (/hanya admin/i.test(m)) return 'Hanya admin yang boleh mengubah harga atau ukuran.'
+  if (/row-level security/i.test(m)) return 'Akun ini tidak punya izin untuk perubahan itu.'
+  if (/duplicate key|already exists/i.test(m)) return 'Kode produk itu sudah dipakai produk lain.'
+  if (/failed to fetch|networkerror/i.test(m)) return 'Tidak tersambung. Cek koneksi, lalu coba lagi.'
+  return m
+}
 
 /** Karakter yang merusak sintaks filter `.or()` PostgREST. */
 const bersihkan = (q: string) => q.replace(/[,()%\\]/g, ' ').trim()

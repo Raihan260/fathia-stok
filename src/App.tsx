@@ -9,9 +9,14 @@ import Opname from './pages/Opname'
 import { Spinner } from './components/ui'
 
 export default function App() {
-  const { session, siap, pasangListener, keluar } = useAuth()
+  const { session, role, siap, pasangListener, muatRole, keluar } = useAuth()
 
   useEffect(() => pasangListener(), [pasangListener])
+
+  // Dipanggil di sini, bukan di dalam listener auth — lihat catatan di store.
+  useEffect(() => {
+    void muatRole()
+  }, [session?.user.id, muatRole])
 
   if (konfigurasiHilang) {
     return (
@@ -30,6 +35,10 @@ export default function App() {
 
   if (!siap) return <Spinner />
   if (!session) return <Login />
+  // Tunggu role diketahui supaya menu admin tidak sempat berkedip untuk staf.
+  if (!role) return <Spinner teks="Menyiapkan…" />
+
+  const admin = role === 'admin'
 
   return (
     <BrowserRouter>
@@ -37,8 +46,11 @@ export default function App() {
         <main className="px-4 py-3">
           <Routes>
             <Route path="/" element={<Cari />} />
-            <Route path="/kelola" element={<Kelola />} />
             <Route path="/opname" element={<Opname />} />
+            <Route
+              path="/kelola"
+              element={admin ? <Kelola /> : <Navigate to="/" replace />}
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -46,8 +58,8 @@ export default function App() {
         <nav className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-2xl pb-[env(safe-area-inset-bottom)]">
             <Tab ke="/" label="Cari" />
-            <Tab ke="/kelola" label="Kelola" />
             <Tab ke="/opname" label="Opname" />
+            {admin && <Tab ke="/kelola" label="Kelola" />}
             <button
               onClick={() => void keluar()}
               className="flex-1 py-3 text-xs font-medium text-stone-400 hover:text-stone-600"
