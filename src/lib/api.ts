@@ -17,6 +17,18 @@ export async function ambilRole(userId: string): Promise<Role> {
   return data?.role === 'admin' ? 'admin' : 'staf'
 }
 
+/**
+ * Kalau penolakan datang karena stok tercatat kurang, kembalikan lokasinya.
+ * Dipakai Cari untuk menawarkan hitung ulang tepat di saat dibutuhkan —
+ * bukan sebagai tombol yang nganggur di alur normal.
+ */
+export function lokasiStokKurang(e: unknown): Lokasi | null {
+  const m = e instanceof Error ? e.message : String(e)
+  if (/stok toko tercatat/i.test(m)) return 'toko'
+  if (/stok gudang tercatat/i.test(m)) return 'gudang'
+  return null
+}
+
 /** Terjemahkan galat database jadi kalimat yang berguna buat orang di toko. */
 export function pesanGalat(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e)

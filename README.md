@@ -72,11 +72,20 @@ User baru otomatis dapat role `staf`. Buat akunnya di Authentication → Users.
 
 ## Halaman
 
+Pembagiannya bukan menurut situasi, tapi menurut jenis tindakan: **Cari
+mencatat kejadian, Opname membetulkan catatan.** Hitung ulang sempat ada di
+kedua halaman dan hasilnya cuma dua tempat mengerjakan hal yang sama.
+
 | Halaman | Isi |
 |---|---|
-| Cari | Kotak search, hasil berupa harga per ukuran + status. Tap ukuran untuk ganti status. |
-| Kelola | Tambah/ubah produk dan ukuran. |
-| Opname | Satu kategori per layar, semua ukuran sekaligus, untuk pengecekan rutin. |
+| Cari | Search, lalu harga + jumlah per ukuran. Tap ukuran untuk mencatat kejadian: Terjual, Ambil dari gudang, Barang masuk. Plus riwayat 5 pergerakan terakhir. |
+| Opname | Membetulkan catatan terhadap hitungan fisik. Semua ukuran satu toko sekaligus, ada kotak penyaring kalau cuma satu produk yang perlu dibetulkan. |
+| Kelola | Tambah/ubah produk dan ukuran. Admin saja. |
+
+Satu perkecualian pada pembagian itu: kalau pencatatan di Cari ditolak karena
+stok tercatat kurang, tombol hitung ulang muncul di situ juga — hanya pada saat
+itu, karena di situlah koreksi memang sedang dibutuhkan. Di luar itu alur Cari
+tetap tiga tombol.
 
 ## Setup
 

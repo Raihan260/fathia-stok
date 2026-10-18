@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { ambilMutasi, cariProduk, catatMutasi, hitungUlang, pesanGalat } from '../lib/api'
+import {
+  ambilMutasi,
+  cariProduk,
+  catatMutasi,
+  hitungUlang,
+  lokasiStokKurang,
+  pesanGalat,
+} from '../lib/api'
 import { useToko } from '../store/toko'
-import type { Mutasi, Produk, Varian } from '../lib/types'
+import type { Lokasi, Mutasi, Produk, Varian } from '../lib/types'
 import { LABEL_MUTASI, pcs, rupiah, statusDari, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
@@ -145,14 +152,24 @@ function Jumlah({ label, jumlah, batas }: { label: string; jumlah: number; batas
   )
 }
 
-type Aksi = 'jual' | 'pindah_ke_toko' | 'barang_masuk' | 'hitung_toko' | 'hitung_gudang'
+/**
+ * Halaman ini hanya MENCATAT KEJADIAN: barang terjual, pindah, atau masuk.
+ * Membetulkan catatan terhadap hitungan fisik bukan kejadian, itu urusan
+ * halaman Opname — dulu ada di sini juga dan cuma jadi dua tempat mengerjakan
+ * hal yang sama.
+ *
+ * Perkecualiannya `koreksi_*`: tidak punya tombol sendiri, hanya muncul saat
+ * sebuah pencatatan ditolak karena stok tercatat kurang. Di situ koreksi
+ * memang sedang dibutuhkan, bukan sekadar tersedia.
+ */
+type Aksi = 'jual' | 'pindah_ke_toko' | 'barang_masuk' | 'koreksi_toko' | 'koreksi_gudang'
 
 const JUDUL_AKSI: Record<Aksi, string> = {
   jual: 'Terjual berapa pcs?',
   pindah_ke_toko: 'Ambil dari gudang berapa pcs?',
   barang_masuk: 'Barang masuk gudang berapa pcs?',
-  hitung_toko: 'Hasil hitung fisik di toko berapa pcs?',
-  hitung_gudang: 'Hasil hitung fisik di gudang berapa pcs?',
+  koreksi_toko: 'Hitung fisik di toko sekarang berapa pcs?',
+  koreksi_gudang: 'Hitung fisik di gudang sekarang berapa pcs?',
 }
 
 function PanelAksi({
@@ -168,10 +185,21 @@ function PanelAksi({
   const [nilai, setNilai] = useState('')
   const [sibuk, setSibuk] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
+  const [kabar, setKabar] = useState<string | null>(null)
+  /** Terisi hanya saat pencatatan ditolak karena stok tercatat kurang. */
+  const [tawarKoreksi, setTawarKoreksi] = useState<Lokasi | null>(null)
   const [riwayat, setRiwayat] = useState<Mutasi[] | null>(null)
 
   const umurToko = umurHitung(varian.toko_dihitung_at)
   const umurGudang = umurHitung(varian.gudang_dihitung_at)
+  const koreksi = aksi === 'koreksi_toko' || aksi === 'koreksi_gudang'
+
+  function bersihkan() {
+    setAksi(null)
+    setNilai('')
+    setGalat(null)
+    setTawarKoreksi(null)
+  }
 
   async function simpan() {
     const n = Number(nilai)
@@ -179,12 +207,14 @@ function PanelAksi({
       setGalat('Isi jumlahnya dulu.')
       return
     }
-    if (aksi !== 'hitung_toko' && aksi !== 'hitung_gudang' && n === 0) {
+    // Koreksi boleh nol (memang habis); pencatatan kejadian tidak.
+    if (!koreksi && n === 0) {
       setGalat('Jumlahnya tidak boleh nol.')
       return
     }
     setSibuk(true)
     setGalat(null)
+    setKabar(null)
     try {
       let baru: Varian
       if (aksi === 'jual') {
@@ -203,14 +233,15 @@ function PanelAksi({
           deltaGudang: n,
         })
       } else {
-        baru = await hitungUlang(varian.id, aksi === 'hitung_toko' ? 'toko' : 'gudang', n)
+        baru = await hitungUlang(varian.id, aksi === 'koreksi_toko' ? 'toko' : 'gudang', n)
+        setKabar('Stok sudah dibetulkan. Catat lagi kejadiannya.')
       }
       onBerubah(baru)
-      setAksi(null)
-      setNilai('')
+      bersihkan()
       setRiwayat(null)
     } catch (err) {
       setGalat(pesanGalat(err))
+      setTawarKoreksi(lokasiStokKurang(err))
     } finally {
       setSibuk(false)
     }
@@ -237,17 +268,35 @@ function PanelAksi({
 
       {galat && <Galat pesan={galat} />}
 
+      {/*
+        Jalan keluar saat catatan dan kenyataan tidak cocok. Muncul hanya
+        sesudah penolakan, supaya alur normal tetap tiga tombol.
+      */}
+      {tawarKoreksi && (
+        <button
+          onClick={() => {
+            setAksi(tawarKoreksi === 'toko' ? 'koreksi_toko' : 'koreksi_gudang')
+            setNilai('')
+            setGalat(null)
+            setTawarKoreksi(null)
+          }}
+          className="w-full rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600"
+        >
+          Hitung ulang stok {tawarKoreksi}
+        </button>
+      )}
+
+      {kabar && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 ring-1 ring-emerald-200">
+          {kabar}
+        </p>
+      )}
+
       {aksi === null ? (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <TombolAksi label="Terjual" onClick={() => setAksi('jual')} utama />
-            <TombolAksi label="Ambil dari gudang" onClick={() => setAksi('pindah_ke_toko')} />
-            <TombolAksi label="Barang masuk" onClick={() => setAksi('barang_masuk')} />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <TombolAksi label="Hitung toko" onClick={() => setAksi('hitung_toko')} />
-            <TombolAksi label="Hitung gudang" onClick={() => setAksi('hitung_gudang')} />
-          </div>
+        <div className="grid grid-cols-3 gap-2">
+          <TombolAksi label="Terjual" onClick={() => setAksi('jual')} utama />
+          <TombolAksi label="Ambil dari gudang" onClick={() => setAksi('pindah_ke_toko')} />
+          <TombolAksi label="Barang masuk" onClick={() => setAksi('barang_masuk')} />
         </div>
       ) : (
         <div className="space-y-2">
@@ -270,11 +319,7 @@ function PanelAksi({
               {sibuk ? 'Menyimpan…' : 'Simpan'}
             </button>
             <button
-              onClick={() => {
-                setAksi(null)
-                setNilai('')
-                setGalat(null)
-              }}
+              onClick={bersihkan}
               className="px-3 text-sm text-stone-500"
             >
               Batal
