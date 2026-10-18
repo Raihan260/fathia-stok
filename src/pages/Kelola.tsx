@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
+  arsipkanProduk,
   cariProduk,
-  hapusProduk,
   hapusVarian,
   pesanGalat,
   produkPerKategori,
@@ -22,6 +22,8 @@ export default function Kelola() {
   const toko = useToko((s) => s.toko)
   const [daftar, setDaftar] = useState<Produk[]>([])
   const [q, setQ] = useState('')
+  /** Arsip tidak punya pencarian sendiri — isinya sedikit, cukup didaftar. */
+  const [lihatArsip, setLihatArsip] = useState(false)
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
   const [edit, setEdit] = useState<Produk | 'baru' | null>(null)
@@ -30,7 +32,11 @@ export default function Kelola() {
     if (!toko) return
     setSibuk(true)
     try {
-      setDaftar(q.trim() ? await cariProduk(q, toko.id) : await produkPerKategori(toko.id))
+      if (lihatArsip) {
+        setDaftar(await produkPerKategori(toko.id, false))
+      } else {
+        setDaftar(q.trim() ? await cariProduk(q, toko.id) : await produkPerKategori(toko.id))
+      }
       setGalat(null)
     } catch (e) {
       setGalat(pesanGalat(e))
@@ -42,7 +48,17 @@ export default function Kelola() {
   useEffect(() => {
     void muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toko?.id, q])
+  }, [toko?.id, q, lihatArsip])
+
+  async function pulihkan(p: Produk) {
+    if (!confirm(`Pulihkan ${p.kode} ke daftar produk?`)) return
+    try {
+      await arsipkanProduk(p.id, false)
+      void muat()
+    } catch (e) {
+      setGalat(pesanGalat(e))
+    }
+  }
 
   if (edit && toko) {
     return (
@@ -61,46 +77,102 @@ export default function Kelola() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Kelola produk</h1>
-        <button
-          onClick={() => setEdit('baru')}
-          className="rounded-lg bg-pink-700 px-3 py-2 text-sm font-semibold text-white hover:bg-pink-800"
-        >
-          + Produk
-        </button>
+        <h1 className="text-lg font-semibold">
+          {lihatArsip ? 'Arsip produk' : 'Kelola produk'}
+        </h1>
+        {!lihatArsip && (
+          <button
+            onClick={() => setEdit('baru')}
+            className="rounded-lg bg-pink-700 px-3 py-2 text-sm font-semibold text-white hover:bg-pink-800"
+          >
+            + Produk
+          </button>
+        )}
       </div>
 
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        type="search"
-        placeholder="Cari kode atau nama…"
-        className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
-      />
+      {!lihatArsip && (
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          type="search"
+          placeholder="Cari kode atau nama…"
+          className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
+        />
+      )}
+
+      {lihatArsip && (
+        <p className="rounded-lg bg-stone-100 px-4 py-2.5 text-xs text-stone-600">
+          Produk di sini tidak muncul di halaman Cari dan Opname, tapi kode dan
+          riwayat penjualannya tetap tersimpan — termasuk kodenya, yang tetap
+          tidak bisa dipakai produk baru.
+        </p>
+      )}
 
       {galat && <Galat pesan={galat} />}
       {sibuk ? (
         <Spinner />
       ) : daftar.length === 0 ? (
-        <Kosong teks={`Belum ada produk di ${toko?.nama ?? 'toko ini'}.`} />
+        <Kosong
+          teks={
+            lihatArsip
+              ? 'Arsip kosong.'
+              : `Belum ada produk di ${toko?.nama ?? 'toko ini'}.`
+          }
+        />
       ) : (
         <ul className="space-y-2">
           {daftar.map((p) => (
-            <li key={p.id}>
+            <li
+              key={p.id}
+              className="flex items-center gap-2 rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-stone-200"
+            >
               <button
-                onClick={() => setEdit(p)}
-                className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 text-left shadow-sm ring-1 ring-stone-200 hover:bg-stone-50"
+                onClick={() => !lihatArsip && setEdit(p)}
+                disabled={lihatArsip}
+                className="flex flex-1 items-center gap-3 overflow-hidden text-left disabled:cursor-default"
               >
-                <span className="rounded bg-stone-900 px-2 py-0.5 font-mono text-xs font-bold text-white">
+                <span
+                  className={`shrink-0 rounded px-2 py-0.5 font-mono text-xs font-bold text-white ${
+                    lihatArsip ? 'bg-stone-400' : 'bg-stone-900'
+                  }`}
+                >
                   {p.kode}
                 </span>
-                <span className="flex-1 truncate text-sm font-medium">{p.nama}</span>
-                <span className="text-xs text-stone-400">{p.varian.length} ukuran</span>
+                <span
+                  className={`flex-1 truncate text-sm font-medium ${
+                    lihatArsip ? 'text-stone-500' : ''
+                  }`}
+                >
+                  {p.nama}
+                </span>
+                {!lihatArsip && (
+                  <span className="shrink-0 text-xs text-stone-400">
+                    {p.varian.length} ukuran
+                  </span>
+                )}
               </button>
+              {lihatArsip && (
+                <button
+                  onClick={() => void pulihkan(p)}
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-pink-700 ring-1 ring-pink-300 hover:bg-pink-50"
+                >
+                  Pulihkan
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
+
+      <button
+        onClick={() => {
+          setLihatArsip(!lihatArsip)
+          setQ('')
+        }}
+        className="w-full py-2 text-sm text-stone-500 underline-offset-2 hover:underline"
+      >
+        {lihatArsip ? '← Kembali ke daftar produk' : 'Lihat arsip'}
+      </button>
     </div>
   )
 }
@@ -278,9 +350,21 @@ function FormProduk({
       {produk && (
         <button
           onClick={async () => {
-            if (!confirm(`Arsipkan produk ${produk.kode}?`)) return
-            await hapusProduk(produk.id)
-            onSelesai()
+            if (
+              !confirm(
+                `Arsipkan ${produk.kode}?\n\n` +
+                  'Produk hilang dari halaman Cari dan Opname, tapi harga, stok, ' +
+                  'dan riwayat penjualannya tetap tersimpan. Bisa dipulihkan ' +
+                  'lewat "Lihat arsip".',
+              )
+            )
+              return
+            try {
+              await arsipkanProduk(produk.id)
+              onSelesai()
+            } catch (e) {
+              setGalat(pesanGalat(e))
+            }
           }}
           className="w-full py-2 text-sm text-stone-500 hover:text-rose-700"
         >

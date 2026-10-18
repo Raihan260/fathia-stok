@@ -34,7 +34,10 @@ export function pesanGalat(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e)
   if (/hanya admin/i.test(m)) return 'Hanya admin yang boleh mengubah harga atau ukuran.'
   if (/row-level security/i.test(m)) return 'Akun ini tidak punya izin untuk perubahan itu.'
-  if (/duplicate key|already exists/i.test(m)) return 'Kode produk itu sudah dipakai produk lain.'
+  // Kode unik berlaku juga untuk produk yang diarsipkan, dan produk arsip
+  // tidak kelihatan di daftar — tanpa petunjuk ini orang akan bingung.
+  if (/duplicate key|already exists/i.test(m))
+    return 'Kode itu sudah dipakai produk lain. Cek juga arsip — kode produk yang diarsipkan tetap terpakai.'
   if (/failed to fetch|networkerror/i.test(m)) return 'Tidak tersambung. Cek koneksi, lalu coba lagi.'
   return m
 }
@@ -73,12 +76,16 @@ export async function cariProduk(q: string, kategoriId: string): Promise<Produk[
   return (data ?? []) as unknown as Produk[]
 }
 
-export async function produkPerKategori(kategoriId: string): Promise<Produk[]> {
+/**
+ * `aktif` memilih mana yang diambil: true = produk berjalan (dipakai semua
+ * halaman kerja), false = isi arsip (hanya halaman Kelola).
+ */
+export async function produkPerKategori(kategoriId: string, aktif = true): Promise<Produk[]> {
   const { data, error } = await supabase
     .from('produk')
     .select(PILIH_PRODUK)
     .eq('kategori_id', kategoriId)
-    .eq('aktif', true)
+    .eq('aktif', aktif)
     .order('kode')
     .order('urutan', { referencedTable: 'varian' })
 
@@ -150,9 +157,13 @@ export async function simpanProduk(p: {
   return data.id as string
 }
 
-export async function hapusProduk(id: string): Promise<void> {
-  // Soft delete: riwayat tetap ada, varian tidak ikut hilang.
-  const { error } = await supabase.from('produk').update({ aktif: false }).eq('id', id)
+/**
+ * Mengarsipkan, bukan menghapus. Tabel mutasi terhubung ke varian dengan
+ * `on delete cascade`, jadi hapus betulan ikut menghapus seluruh riwayat
+ * penjualan produk itu. Diarsipkan: hilang dari halaman kerja, datanya utuh.
+ */
+export async function arsipkanProduk(id: string, arsip = true): Promise<void> {
+  const { error } = await supabase.from('produk').update({ aktif: !arsip }).eq('id', id)
   if (error) throw error
 }
 

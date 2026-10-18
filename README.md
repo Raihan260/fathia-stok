@@ -80,7 +80,17 @@ kedua halaman dan hasilnya cuma dua tempat mengerjakan hal yang sama.
 |---|---|
 | Cari | Search, lalu harga + jumlah per ukuran. Tap ukuran untuk mencatat kejadian: Terjual, Ambil dari gudang, Barang masuk. Plus riwayat 5 pergerakan terakhir. |
 | Opname | Membetulkan catatan terhadap hitungan fisik. Semua ukuran satu toko sekaligus, ada kotak penyaring kalau cuma satu produk yang perlu dibetulkan. |
-| Kelola | Tambah/ubah produk dan ukuran. Admin saja. |
+| Kelola | Tambah/ubah produk dan ukuran, plus arsip. Admin saja. |
+
+**Arsip** menandai `produk.aktif = false`, bukan menghapus barisnya: tabel
+`mutasi` terhubung ke `varian` dengan `on delete cascade`, jadi hapus betulan
+ikut menghapus seluruh riwayat penjualan produk itu. Produk arsip hilang dari
+Cari dan Opname, bisa dilihat dan dipulihkan lewat "Lihat arsip" di Kelola.
+
+Kolom `kode` unik di seluruh tabel, termasuk produk yang diarsipkan — jadi kode
+produk arsip tetap tidak bisa dipakai produk baru. Pesan galatnya menyebut itu,
+karena kalau tidak, penolakannya membingungkan: produknya tidak kelihatan di
+mana pun.
 
 Satu perkecualian pada pembagian itu: kalau pencatatan di Cari ditolak karena
 stok tercatat kurang, tombol hitung ulang muncul di situ juga — hanya pada saat
