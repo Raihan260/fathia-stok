@@ -60,9 +60,16 @@ export default function App() {
             <Tab ke="/" label="Cari" />
             <Tab ke="/opname" label="Opname" />
             {admin && <Tab ke="/kelola" label="Kelola" />}
+            {/*
+              Dipersempit dan dipisah garis supaya tidak lagi selebar tab —
+              tombol keluar selebar tab terlalu gampang kepencet. Konfirmasi
+              jadi pengaman keduanya.
+            */}
             <button
-              onClick={() => void keluar()}
-              className="flex-1 py-3 text-xs font-medium text-stone-400 hover:text-stone-600"
+              onClick={() => {
+                if (confirm('Keluar dari akun ini?')) void keluar()
+              }}
+              className="w-16 shrink-0 border-l border-stone-200 py-3 text-xs font-medium text-stone-400 hover:text-stone-600"
             >
               Keluar
             </button>
