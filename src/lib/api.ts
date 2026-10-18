@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type {
+  BarisRiwayat,
   JenisMutasi,
   Kategori,
   Lokasi,
@@ -229,6 +230,26 @@ export async function ambilNamaPembeli(kategoriId: string): Promise<string[]> {
   const unik = new Set<string>()
   for (const r of data ?? []) if (r.pembeli) unik.add(r.pembeli as string)
   return [...unik]
+}
+
+/**
+ * Riwayat perubahan stok untuk admin. Lewat RPC, bukan query biasa, karena
+ * barisnya perlu menyebut email pelakunya dan `auth.users` tidak terbaca dari
+ * sisi aplikasi. Fungsinya menolak pemanggil yang bukan admin.
+ */
+export async function riwayatStok(
+  kategoriId: string,
+  jenis: JenisMutasi[] | null,
+  batas = 100,
+): Promise<BarisRiwayat[]> {
+  const { data, error } = await supabase.rpc('riwayat_stok', {
+    p_kategori_id: kategoriId,
+    p_jenis: jenis,
+    p_batas: batas,
+    p_lewati: 0,
+  })
+  if (error) throw error
+  return (data ?? []) as BarisRiwayat[]
 }
 
 export async function ambilMutasi(varianId: string, batas = 5): Promise<Mutasi[]> {

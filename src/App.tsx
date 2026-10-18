@@ -12,6 +12,7 @@ import Cari from './pages/Cari'
 import Jual from './pages/Jual'
 import Ambil from './pages/Ambil'
 import Nota, { NotaDetail } from './pages/Nota'
+import RiwayatStok from './pages/RiwayatStok'
 import Kelola from './pages/Kelola'
 import Opname from './pages/Opname'
 import { Galat, Spinner } from './components/ui'
@@ -126,6 +127,10 @@ export default function App() {
             <Route
               path="/kelola"
               element={admin ? <Kelola /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/riwayat"
+              element={admin ? <RiwayatStok /> : <Navigate to="/" replace />}
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

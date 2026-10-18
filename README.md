@@ -93,7 +93,25 @@ per tombol:
 | Nota | Riwayat penjualan, dikelompokkan per tanggal. |
 | Ambil | Memindahkan gudang ke toko. Bentuk sama dengan Jual karena juga lintas model; tanpa harga, karena tidak ada uang berpindah. |
 | Opname | Membetulkan catatan terhadap hitungan fisik, sekaligus jalur masuknya barang baru ke gudang. |
+| Riwayat stok | Siapa mengubah stok, apa, dan kapan. Admin saja. |
 | Kelola | Tambah/ubah produk dan ukuran, plus arsip. Admin saja. |
+
+### Pengawasan, bukan pembatasan
+
+Staf boleh hitung ulang, tambah, dan kurangi stok. Itu disengaja.
+
+Mengunci "Kurangi" tanpa mengunci "Hitung ulang" tidak mengamankan apa pun:
+menghitung ulang ke angka lebih rendah memberi hasil yang sama di stok, yang
+berubah cuma labelnya di riwayat. Dan mengunci ketiganya merusak pekerjaannya —
+yang memegang barang di gudang memang karyawan, dan angka yang ketahuan salah
+jadi tidak bisa dibetulkan sampai admin sempat.
+
+Jadi jejaknya yang dibuat terlihat. `riwayat_stok()` menyajikan semua pergerakan
+beserta email pelakunya; bawaannya menyaring ke penyesuaian manual (`koreksi`
+dan `hitung_ulang`), karena itu yang perlu diperiksa. Fungsinya menolak
+pemanggil yang bukan admin — bukan sekadar disembunyikan di tampilan — karena
+ini satu-satunya tempat email orang lain ikut terlihat. Riwayat per ukuran di
+halaman Cari tetap terbuka untuk semua, tanpa menyebut nama.
 
 ### Kenapa tidak ada halaman "Barang masuk"
 

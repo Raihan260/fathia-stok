@@ -73,6 +73,23 @@ export interface Transaksi {
   transaksi_item?: TransaksiItem[]
 }
 
+/** Satu baris riwayat perubahan stok, sudah digabung dengan produk dan pelakunya. */
+export interface BarisRiwayat {
+  id: string
+  created_at: string
+  jenis: JenisMutasi
+  kode: string
+  nama: string
+  ukuran: string
+  delta_toko: number
+  delta_gudang: number
+  toko_setelah: number
+  gudang_setelah: number
+  catatan: string | null
+  oleh: string
+  nota: string | null
+}
+
 export const tanggalPanjang = (iso: string) =>
   new Date(iso).toLocaleDateString('id-ID', {
     weekday: 'long',

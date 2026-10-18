@@ -74,7 +74,7 @@ export default function Navigasi({
 
   // Halaman yang ada di dalam panel: tabnya ikut menyala supaya jelas posisi
   // sekarang di mana, walaupun bukan salah satu dari tiga tab utama.
-  const diLainnya = ['/nota', '/opname', '/kelola'].some((p) =>
+  const diLainnya = ['/nota', '/opname', '/kelola', '/riwayat'].some((p) =>
     lokasi.pathname.startsWith(p),
   )
 
@@ -102,6 +102,13 @@ export default function Navigasi({
                   ket="Hitung ulang, tambah, atau kurangi stok"
                   onClick={() => navigate('/opname')}
                 />
+                {admin && (
+                  <BarisPanel
+                    label="Riwayat perubahan stok"
+                    ket="Siapa mengubah apa, dan kapan"
+                    onClick={() => navigate('/riwayat')}
+                  />
+                )}
                 {admin && (
                   <BarisPanel
                     label="Kelola produk"
