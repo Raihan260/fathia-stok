@@ -206,23 +206,58 @@ menyusul.**
 
 ## Deploy
 
-Netlify, build command `npm run build`, publish directory `dist`.
-Set `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` di site settings.
+Netlify membangun sendiri dari GitHub. Seluruh setelannya ada di
+`netlify.toml` — build command, publish directory, versi Node, dan nilai
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`. Dashboard Netlify sengaja
+dibiarkan kosong supaya tidak ada setelan tersembunyi yang tidak terlihat saat
+membaca repo.
 
-Penting: Vite menanamkan nilai `VITE_*` ke dalam bundle **saat build**, bukan
-dibaca saat halaman dibuka. Dua akibatnya:
+Netlify diarahkan ke branch **`production`**, bukan `main`. Pekerjaan harian
+masuk ke `main` tanpa menyentuh toko; yang naik ke toko hanya saat `production`
+dimajukan:
 
-- Kalau env var belum di-set waktu build jalan, `konfigurasiHilang` jadi
-  konstanta `true` dan minifier membuang seluruh aplikasi — yang ter-deploy
-  cuma banner peringatan. Set env var dulu, baru deploy.
-- Mengubah env var tidak berpengaruh sampai site di-build ulang.
+```bash
+git push origin main
+git branch -f production main && git push origin production
+```
 
-Konsekuensinya untuk pengembangan: `npm run build` tanpa `.env` tidak benar-benar
-mengompilasi aplikasinya. Untuk memeriksa build secara utuh tanpa kredensial
-asli, isi env var dengan nilai palsu:
+### Kenapa kredensialnya ditulis di repo
+
+`VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` memang dirancang untuk dibaca
+publik: Vite mengirimkan keduanya ke setiap HP yang membuka situs ini, jadi
+siapa pun yang membuka situsnya sudah bisa melihatnya. Yang menjaga data adalah
+RLS di Supabase — tanpa login, keduanya tidak membuka apa pun. Legacy anon key
+sudah dimatikan dan pendaftaran akun baru sudah ditutup.
+
+### Jebakan yang sudah pernah menjebak
+
+Vite menanamkan nilai `VITE_*` ke dalam bundle **saat build**, bukan dibaca saat
+halaman dibuka. Kalau nilainya kosong waktu build jalan, `konfigurasiHilang`
+jadi konstanta `true`, minifier membuang seluruh aplikasi, dan yang ter-deploy
+cuma banner peringatan — **tanpa satu pun error**. Build tetap dilaporkan
+"ready".
+
+Ini sudah terjadi sekali: build pertama lewat GitHub sukses, situsnya kosong.
+Karena itu `npm run build` sekarang dimulai dengan `scripts/cek-env.mjs` yang
+menggagalkan build kalau konfigurasinya belum lengkap. Jangan dilepas.
+
+Catatan lain: mengubah nilai konfigurasi tidak berpengaruh sampai site
+di-build ulang.
+
+### Memeriksa hasil build
+
+Karena kegagalannya tidak bersuara, memastikan build "sukses" saja tidak cukup —
+yang perlu diperiksa adalah isinya:
+
+```bash
+grep -c "Simpan penjualan" dist/assets/index-*.js   # harus 1, bukan 0
+```
+
+Untuk memeriksa build tanpa kredensial asli, pakai nilai palsu:
 
 ```bash
 VITE_SUPABASE_URL=https://dummy.supabase.co \
 VITE_SUPABASE_ANON_KEY=sb_publishable_dummy npm run build
 ```
+
 Rencana subdomain: `stok.fathiakids.com`.
