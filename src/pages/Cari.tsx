@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ambilMutasi, cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Mutasi, Produk, Varian } from '../lib/types'
@@ -19,12 +19,13 @@ export default function Cari() {
   const [hasil, setHasil] = useState<Produk[]>([])
   const [sibuk, setSibuk] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
-  const kotak = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    kotak.current?.focus()
-  }, [])
-
+  /*
+   * Kotak pencarian sengaja TIDAK difokuskan otomatis. Di HP, fokus berarti
+   * keyboard terbuka dan menutupi separuh layar — padahal halaman ini sudah
+   * menampilkan semua produk tanpa perlu diketik, jadi yang paling sering
+   * dilakukan adalah melihat daftarnya, bukan mengetik.
+   */
   useEffect(() => {
     if (!toko) {
       setHasil([])
@@ -57,7 +58,6 @@ export default function Cari() {
       {/* top-11 = tepat di bawah header nama toko yang tingginya h-11 */}
       <div className="sticky top-11 z-10 -mx-4 bg-stone-50/95 px-4 pb-3 pt-2 backdrop-blur">
         <input
-          ref={kotak}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           type="search"

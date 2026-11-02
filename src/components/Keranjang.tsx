@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Lokasi, Produk, Varian } from '../lib/types'
@@ -59,12 +59,11 @@ export default function Keranjang({
   const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
   const [kabar, setKabar] = useState<string | null>(null)
-  const kotak = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    kotak.current?.focus()
-  }, [])
-
+  /*
+   * Tidak difokuskan otomatis — di HP itu membuka keyboard dan menutupi
+   * separuh layar, padahal daftar produknya sudah tampil tanpa perlu diketik.
+   */
   useEffect(() => {
     if (!toko) return
     const kosong = q.trim() === ''
@@ -161,7 +160,6 @@ export default function Keranjang({
       </div>
 
       <input
-        ref={kotak}
         value={q}
         onChange={(e) => setQ(e.target.value)}
         type="search"
