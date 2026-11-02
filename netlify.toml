@@ -1,0 +1,18 @@
+# Pengaturan build dibaca dari berkas ini, bukan dari dashboard Netlify.
+# Alasannya: setelan yang hidup di dashboard tidak terlihat saat membaca repo,
+# dan kalau suatu saat site-nya dibuat ulang, setelannya ikut hilang.
+#
+# Netlify diarahkan ke branch `production`, bukan `main`. Pekerjaan harian
+# masuk ke `main` tanpa menyentuh toko; yang naik ke toko hanya saat
+# `production` dimajukan ke `main`.
+#
+# Aturan pengalihan SPA ada di `public/_redirects` dan ikut tersalin ke dist/,
+# jadi sengaja tidak diulang di sini.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Disamakan dengan versi yang dipakai saat build diperiksa secara lokal.
+  NODE_VERSION = "22"
