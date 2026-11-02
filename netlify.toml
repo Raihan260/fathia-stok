@@ -16,3 +16,26 @@
 [build.environment]
   # Disamakan dengan versi yang dipakai saat build diperiksa secara lokal.
   NODE_VERSION = "22"
+
+  # Dua nilai di bawah SENGAJA ditulis di repo, bukan disembunyikan.
+  #
+  # Keduanya memang dirancang untuk dibaca publik: Vite menempelkannya ke
+  # dalam berkas JavaScript yang dikirim ke setiap HP yang membuka situs ini,
+  # jadi siapa pun yang membuka situsnya sudah bisa melihat keduanya. Yang
+  # menjaga data bukan kerahasiaan dua nilai ini, melainkan aturan RLS di
+  # Supabase: tanpa login, keduanya tidak membuka apa pun. Legacy anon key
+  # (yang berbentuk JWT panjang) sudah dimatikan, dan pendaftaran akun baru
+  # juga sudah ditutup.
+  #
+  # Ditulis di sini, bukan di dashboard, karena build pertama lewat GitHub
+  # gagal justru karena dashboard-nya kosong — dan kegagalan itu tidak terlihat
+  # di log mana pun. Di repo, nilainya ikut ter-commit dan ikut pindah kalau
+  # site-nya dibuat ulang.
+  VITE_SUPABASE_URL = "https://wlzfrrcrcztkjrydijrm.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_kj7obx5Z1V53qS_Zf4nLLw_2wRMUMHJ"
+
+  # Netlify otomatis menggagalkan build kalau menemukan nilai env var di dalam
+  # hasil build, karena biasanya itu tanda kunci rahasia bocor. Di sini justru
+  # harus ikut terbawa (lihat penjelasan di atas), jadi dua nama ini
+  # dikecualikan dari pemeriksaan tersebut.
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY"
