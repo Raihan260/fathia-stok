@@ -148,16 +148,72 @@ export interface Produk {
 export const rupiah = (n: number) => 'Rp' + new Intl.NumberFormat('id-ID').format(n)
 
 /**
- * Urutan ukuran. Angka diurutkan sebagai angka, huruf pakai urutan baku
- * konveksi (S < M < L < XL ...). Dipakai saat menyimpan varian baru supaya
- * tampilannya tidak jadi alfabetis (yang bikin "10" muncul sebelum "2").
+ * Urutan ukuran.
+ *
+ * Label ukuran di sini sering berupa *rentang*, bukan satu ukuran: satu produk
+ * dijual sebagai "456", "SML", dan "XLXXL" — masing-masing satu kelompok yang
+ * dijual bersama. Urutan yang benar menurut yang pakai: 456, lalu SML, lalu
+ * XLXXL.
+ *
+ * Versi pertama fungsi ini hanya mengenal ukuran tunggal (S, M, L, XL), jadi
+ * semua gabungan jatuh ke satu angka yang sama — 900. Nilai kembar berarti
+ * database bebas memilih mana yang lebih dulu, dan urutannya bisa berubah
+ * sendiri antar pembukaan halaman tanpa ada yang mengubah apa pun. Itu keluhan
+ * yang membuat fungsi ini ditulis ulang.
+ *
+ * Sekarang labelnya dipecah dulu jadi ukuran-ukuran penyusunnya, lalu diurutkan
+ * berdasarkan ukuran TERKECIL di dalamnya — karena itulah yang menentukan
+ * rentang mana yang datang lebih dulu. Ukuran terbesar jadi pemisah kalau yang
+ * terkecil sama: "SML" sebelum "SMLXL", keduanya mulai dari S.
  */
-const URUTAN_HURUF = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'ALL SIZE']
+const URUTAN_HURUF = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+
+// Dicoba dari yang paling panjang supaya "XXL" tidak terbaca sebagai "XL" + "L",
+// dan "XLXXL" terbaca "XL" + "XXL" bukan "XL" + "X" + "XL".
+const HURUF_TERPANJANG_DULU = [...URUTAN_HURUF].sort((a, b) => b.length - a.length)
+
+/** Memecah "XLXXL" jadi [4, 5] (indeks di URUTAN_HURUF). [] kalau tidak dikenali. */
+function pecahHuruf(teks: string): number[] {
+  const hasil: number[] = []
+  let sisa = teks
+  while (sisa.length > 0) {
+    const cocok = HURUF_TERPANJANG_DULU.find((h) => sisa.startsWith(h))
+    if (!cocok) return []
+    hasil.push(URUTAN_HURUF.indexOf(cocok))
+    sisa = sisa.slice(cocok.length)
+  }
+  return hasil
+}
 
 export function urutanUkuran(ukuran: string): number {
   const bersih = ukuran.trim().toUpperCase()
+  if (bersih === '') return 1_999
+
+  // Angka tetap diurutkan sebagai angka — itu sudah benar sejak awal, dan
+  // mencegah "10" muncul sebelum "2". Angka selalu di atas huruf.
   const angka = Number(bersih.replace(/[^\d.]/g, ''))
-  if (bersih !== '' && /^\d/.test(bersih) && !Number.isNaN(angka)) return angka
-  const idx = URUTAN_HURUF.indexOf(bersih)
-  return idx === -1 ? 900 : 1000 + idx
+  if (/^\d/.test(bersih) && !Number.isNaN(angka)) return angka
+
+  if (bersih === 'ALL SIZE' || bersih === 'ALLSIZE') return 1_900
+
+  const bagian = pecahHuruf(bersih.replace(/[\s-]/g, ''))
+  if (bagian.length === 0) return 1_950 // tidak dikenali: ditaruh paling bawah
+
+  const terkecil = Math.min(...bagian)
+  const terbesar = Math.max(...bagian)
+  return 1_000 + terkecil * 10 + terbesar
+}
+
+/**
+ * Pembanding yang dipakai saat menampilkan.
+ *
+ * Ada pemisah kedua berupa teks labelnya sendiri. Gunanya bukan keindahan:
+ * selama pemisahnya cuma satu angka, dua label yang tidak dikenali fungsi di
+ * atas akan kembali bernilai sama dan kembali bisa bertukar tempat sendiri.
+ * Dengan pembanding ini, urutan yang tampil selalu sama setiap kali dibuka,
+ * apa pun label yang diketik.
+ */
+export function bandingkanUkuran(a: string, b: string): number {
+  const beda = urutanUkuran(a) - urutanUkuran(b)
+  return beda !== 0 ? beda : a.localeCompare(b, 'id')
 }

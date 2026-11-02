@@ -10,7 +10,7 @@ import type {
   Transaksi,
   Varian,
 } from './types'
-import { urutanUkuran } from './types'
+import { bandingkanUkuran, urutanUkuran } from './types'
 
 const PILIH_PRODUK = '*, kategori:kategori_id(*), varian(*)'
 
@@ -68,6 +68,22 @@ export async function ambilKategori(): Promise<Kategori[]> {
  * pencarian yang menjangkau kategori lain cuma membuka peluang salah input
  * barang toko sebelah tanpa si pemakai merasa berpindah ke mana-mana.
  */
+/**
+ * Mengurutkan ukuran di sisi aplikasi, bukan mengandalkan kolom `urutan`.
+ *
+ * Kolom `urutan` diisi sekali saat varian disimpan, jadi memperbaiki rumus
+ * urutannya tidak membetulkan baris yang sudah lama ada — nilainya tetap yang
+ * lama. Dihitung di sini, perbaikan rumus langsung berlaku untuk semua produk
+ * yang sudah pernah dimasukkan, tanpa perlu menyentuh satu baris pun di
+ * database.
+ */
+function urutkanVarian(produk: Produk[]): Produk[] {
+  for (const p of produk) {
+    p.varian?.sort((a, b) => bandingkanUkuran(a.ukuran, b.ukuran))
+  }
+  return produk
+}
+
 export async function cariProduk(q: string, kategoriId: string): Promise<Produk[]> {
   const kueri = bersihkan(q)
   if (kueri.length < 1) return []
@@ -83,7 +99,7 @@ export async function cariProduk(q: string, kategoriId: string): Promise<Produk[
     .limit(30)
 
   if (error) throw error
-  return (data ?? []) as unknown as Produk[]
+  return urutkanVarian((data ?? []) as unknown as Produk[])
 }
 
 /**
@@ -100,7 +116,7 @@ export async function produkPerKategori(kategoriId: string, aktif = true): Promi
     .order('urutan', { referencedTable: 'varian' })
 
   if (error) throw error
-  return (data ?? []) as unknown as Produk[]
+  return urutkanVarian((data ?? []) as unknown as Produk[])
 }
 
 /**
