@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { ambilTransaksi, ambilTransaksiSatu, pesanGalat } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Transaksi } from '../lib/types'
@@ -9,8 +9,8 @@ import { Galat, Kosong, Spinner } from '../components/ui'
 /** Daftar nota toko ini, terbaru dulu, dikelompokkan per tanggal. */
 export default function Nota() {
   const sesi = useToko((s) => s.sesi)
+  const lokasi = useLocation()
   const [daftar, setDaftar] = useState<Transaksi[]>([])
-  const [q, setQ] = useState('')
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
 
@@ -27,7 +27,31 @@ export default function Nota() {
    * saringan yang tidak menyaring apa pun.
    */
   const banyakToko = (sesi?.tokoSekategori ?? 1) > 1
-  const [semuaToko, setSemuaToko] = useState(false)
+
+  /*
+   * Cakupan dan kata pencarian disimpan di ALAMAT halaman, bukan di dalam
+   * komponennya.
+   *
+   * Sebagai state biasa keduanya ikut hilang begitu halaman ini dilepas —
+   * yaitu tepat saat sebuah nota dibuka. Kembali dari nota lalu mendapati
+   * daftarnya sudah balik ke toko ini sendiri adalah kehilangan tempat yang
+   * harus dicari ulang, tiap kali. Alamat halaman justru benda yang memang
+   * dipulihkan oleh tombol kembali.
+   *
+   * `replace` dipakai supaya menekan tab atau mengetik tidak menumpuk riwayat
+   * langkah; kalau menumpuk, tombol kembali dari nota akan memundurkan satu
+   * per satu setiap ketukan yang pernah dilakukan.
+   */
+  const [param, setParam] = useSearchParams()
+  const semuaToko = param.get('semua') === '1'
+  const q = param.get('cari') ?? ''
+
+  function ubahParam(baru: { semua?: boolean; cari?: string }) {
+    const p = new URLSearchParams(param)
+    if (baru.semua !== undefined) baru.semua ? p.set('semua', '1') : p.delete('semua')
+    if (baru.cari !== undefined) baru.cari ? p.set('cari', baru.cari) : p.delete('cari')
+    setParam(p, { replace: true })
+  }
 
   useEffect(() => {
     if (!sesi) return
@@ -77,7 +101,7 @@ export default function Nota() {
           ).map(([nilai, label]) => (
             <button
               key={String(nilai)}
-              onClick={() => setSemuaToko(nilai)}
+              onClick={() => ubahParam({ semua: nilai })}
               className={`flex-1 truncate py-2 text-sm font-semibold ${
                 semuaToko === nilai ? 'bg-stone-900 text-white' : 'bg-white text-stone-500'
               }`}
@@ -90,7 +114,7 @@ export default function Nota() {
 
       <input
         value={q}
-        onChange={(e) => setQ(e.target.value)}
+        onChange={(e) => ubahParam({ cari: e.target.value })}
         type="search"
         placeholder="Cari nomor nota atau nama pembeli…"
         className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
@@ -121,6 +145,10 @@ export default function Nota() {
                   <li key={t.id}>
                     <Link
                       to={`/nota/${t.id}`}
+                      // Dibawa serta supaya tombol "← Riwayat nota" di dalam
+                      // nota kembali ke daftar yang sama persis, bukan ke
+                      // daftar bawaan.
+                      state={{ dari: lokasi.search }}
                       className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-stone-200 hover:bg-stone-50"
                     >
                       <span className="shrink-0 rounded bg-stone-900 px-2 py-0.5 font-mono text-xs font-bold text-white">
@@ -161,6 +189,8 @@ export default function Nota() {
 /** Satu nota, lengkap dengan barisnya. */
 export function NotaDetail() {
   const { id } = useParams<{ id: string }>()
+  const lokasi = useLocation()
+  const kembaliKe = '/nota' + ((lokasi.state as { dari?: string } | null)?.dari ?? '')
   const [nota, setNota] = useState<Transaksi | null>(null)
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
@@ -183,7 +213,7 @@ export function NotaDetail() {
 
   return (
     <div className="space-y-4">
-      <Link to="/nota" className="text-sm font-medium text-pink-700 hover:underline">
+      <Link to={kembaliKe} className="text-sm font-medium text-pink-700 hover:underline">
         ← Riwayat nota
       </Link>
 
