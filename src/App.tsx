@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Navigasi from './components/Navigasi'
 import { useAuth } from './store/auth'
-import { useToko } from './store/toko'
+import { buatSesi, useToko } from './store/toko'
 import { konfigurasiHilang } from './lib/supabase'
-import { ambilKategori, pesanGalat } from './lib/api'
-import type { Kategori } from './lib/types'
+import { ambilTempat, pesanGalat } from './lib/api'
+import type { Tempat } from './lib/types'
+import { labelTempat } from './lib/types'
 import Login from './pages/Login'
 import PilihToko from './pages/PilihToko'
 import Cari from './pages/Cari'
@@ -19,9 +20,9 @@ import { Galat, Spinner } from './components/ui'
 
 export default function App() {
   const { session, role, siap, pasangListener, muatRole, keluar } = useAuth()
-  const { tokoId, toko, pilihToko, pasangToko, lupakanToko } = useToko()
+  const { tokoId, sesi, pilihToko, pasangSesi, lupakanToko } = useToko()
 
-  const [kategori, setKategori] = useState<Kategori[] | null>(null)
+  const [tempat, setTempat] = useState<Tempat[] | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
 
   useEffect(() => pasangListener(), [pasangListener])
@@ -30,26 +31,26 @@ export default function App() {
     void muatRole()
   }, [session?.user.id, muatRole])
 
-  // Daftar kategori hanya bisa dibaca setelah login (RLS), jadi dimuat di sini.
+  // Daftar tempat hanya bisa dibaca setelah login (RLS), jadi dimuat di sini.
   useEffect(() => {
     if (!session) {
-      setKategori(null)
+      setTempat(null)
       return
     }
-    ambilKategori()
-      .then((k) => {
-        setKategori(k)
+    ambilTempat()
+      .then((t) => {
+        setTempat(t)
         setGalat(null)
       })
       .catch((e) => setGalat(pesanGalat(e)))
   }, [session?.user.id])
 
   // Cocokkan id yang tersimpan di perangkat dengan daftar yang baru dimuat.
-  // Kalau kategorinya sudah tidak ada, pilihan lama dibuang.
+  // Kalau tokonya sudah tidak ada, pilihan lama dibuang.
   useEffect(() => {
-    if (!kategori) return
-    pasangToko(kategori.find((k) => k.id === tokoId) ?? null)
-  }, [kategori, tokoId, pasangToko])
+    if (!tempat) return
+    pasangSesi(buatSesi(tempat.find((t) => t.id === tokoId) ?? null, tempat))
+  }, [tempat, tokoId, pasangSesi])
 
   async function keluarPenuh() {
     lupakanToko()
@@ -83,21 +84,22 @@ export default function App() {
     )
   }
 
-  if (!kategori) return <Spinner teks="Memuat toko…" />
+  if (!tempat) return <Spinner teks="Memuat toko…" />
 
   // Belum memilih toko — tidak ada halaman kerja yang boleh terbuka dulu.
-  if (!toko) {
+  if (!sesi) {
     return (
       <PilihToko
-        kategori={kategori}
+        tempat={tempat}
         email={session.user.email}
-        onPilih={pilihToko}
+        onPilih={(t) => pilihToko(t, tempat)}
         onKeluar={() => void keluarPenuh()}
       />
     )
   }
 
   const admin = role === 'admin'
+  const namaToko = labelTempat(sesi.toko, sesi.tokoSekategori)
 
   return (
     <BrowserRouter>
@@ -109,7 +111,7 @@ export default function App() {
         <header className="sticky top-0 z-20 h-11 border-b border-stone-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex h-full max-w-2xl items-center gap-2 px-4">
             <span className="h-2 w-2 shrink-0 rounded-full bg-pink-600" />
-            <span className="truncate text-sm font-semibold">{toko.nama}</span>
+            <span className="truncate text-sm font-semibold">{namaToko}</span>
             <span className="ml-auto shrink-0 text-xs text-stone-400">
               {admin ? 'Admin' : 'Staf'}
             </span>
@@ -138,7 +140,7 @@ export default function App() {
 
         <Navigasi
           admin={admin}
-          namaToko={toko.nama}
+          namaToko={namaToko}
           onKeluar={() => void keluarPenuh()}
         />
       </div>

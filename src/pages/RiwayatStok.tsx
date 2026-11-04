@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { pesanGalat, riwayatStok } from '../lib/api'
+import { pesanGalat, riwayatPerubahan } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { BarisRiwayat, JenisMutasi } from '../lib/types'
 import { LABEL_MUTASI, jamSingkat, tanggalPanjang } from '../lib/types'
@@ -25,23 +25,23 @@ const JENIS_SARINGAN: Record<Saringan, JenisMutasi[] | null> = {
 }
 
 export default function RiwayatStok() {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [saringan, setSaringan] = useState<Saringan>('penyesuaian')
   const [baris, setBaris] = useState<BarisRiwayat[]>([])
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!toko) return
+    if (!sesi) return
     setSibuk(true)
-    riwayatStok(toko.id, JENIS_SARINGAN[saringan])
+    riwayatPerubahan(sesi.kategori.id, JENIS_SARINGAN[saringan])
       .then((d) => {
         setBaris(d)
         setGalat(null)
       })
       .catch((e) => setGalat(pesanGalat(e)))
       .finally(() => setSibuk(false))
-  }, [toko?.id, saringan])
+  }, [sesi?.kategori.id, saringan])
 
   // Dikelompokkan per tanggal supaya pola "setiap Sabtu turun" atau sejenisnya
   // kelihatan tanpa perlu membaca tiap baris.
@@ -113,9 +113,8 @@ export default function RiwayatStok() {
                       {b.nota && (
                         <span className="font-mono text-[11px] text-stone-400">{b.nota}</span>
                       )}
-                      <span className="ml-auto text-sm font-bold tabular-nums">
-                        <Selisih label="toko" nilai={b.delta_toko} sisa={b.toko_setelah} />
-                        <Selisih label="gudang" nilai={b.delta_gudang} sisa={b.gudang_setelah} />
+                      <span className="ml-auto text-right text-sm font-bold tabular-nums">
+                        <Perpindahan baris={b} />
                       </span>
                     </div>
 
@@ -134,16 +133,39 @@ export default function RiwayatStok() {
   )
 }
 
-function Selisih({ label, nilai, sisa }: { label: string; nilai: number; sisa: number }) {
-  if (nilai === 0) return null
+/**
+ * Satu kejadian dibaca sebagai perpindahan, bukan dua selisih terpisah.
+ *
+ * Bentuk lamanya — "toko +12, gudang −12" — memaksa pembacanya merangkai
+ * sendiri bahwa itu satu barang yang sama berpindah tempat. Dengan dua toko
+ * dalam satu kategori, bentuk itu juga tidak lagi cukup: "toko" yang mana.
+ */
+function Perpindahan({ baris }: { baris: BarisRiwayat }) {
+  const { jumlah, dari, ke, dari_setelah, ke_setelah } = baris
+  if (jumlah == null) return <span className="text-stone-400">—</span>
+
   return (
-    <span className="block text-right">
-      <span className="text-[10px] font-normal text-stone-400">{label} </span>
-      <span className={nilai < 0 ? 'text-rose-600' : 'text-emerald-700'}>
-        {nilai > 0 ? '+' : ''}
-        {nilai}
+    <span className="block">
+      <span className="text-stone-900">{jumlah}</span>
+      <span className="block text-[10px] font-normal text-stone-400">
+        {dari ? (
+          <>
+            {dari}
+            {dari_setelah != null && ` (${dari_setelah})`}
+          </>
+        ) : (
+          'masuk'
+        )}
+        {' → '}
+        {ke ? (
+          <>
+            {ke}
+            {ke_setelah != null && ` (${ke_setelah})`}
+          </>
+        ) : (
+          'keluar'
+        )}
       </span>
-      <span className="text-[10px] font-normal text-stone-400"> → {sisa}</span>
     </span>
   )
 }

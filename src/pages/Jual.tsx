@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Keranjang from '../components/Keranjang'
-import { ambilNamaPembeli, catatPenjualan } from '../lib/api'
+import { ambilNamaPembeli, catatPenjualanToko } from '../lib/api'
 import { useToko } from '../store/toko'
 import { rupiah } from '../lib/types'
 
@@ -14,20 +14,20 @@ import { rupiah } from '../lib/types'
  * terhubung tidak bisa menjawab "tadi Bu Ani ambil apa saja".
  */
 export default function Jual() {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [saran, setSaran] = useState<string[]>([])
 
   useEffect(() => {
-    if (!toko) return
-    ambilNamaPembeli(toko.id)
+    if (!sesi) return
+    ambilNamaPembeli(sesi.kategori.id)
       .then(setSaran)
       .catch(() => setSaran([])) // saran nama bukan hal penting; diamkan saja
-  }, [toko?.id])
+  }, [sesi?.kategori.id])
 
   return (
     <Keranjang
       judul="Jual"
-      sumber="toko"
+      sumberId={sesi?.toko.id ?? null}
       tampilkanHarga
       pakaiPembeli
       saranPembeli={saran}
@@ -39,8 +39,11 @@ export default function Jual() {
         </Link>
       }
       onSimpan={async (baris, pembeli) => {
-        if (!toko) throw new Error('Toko belum dipilih')
-        const nota = await catatPenjualan(toko.id, baris, pembeli)
+        if (!sesi) throw new Error('Toko belum dipilih')
+        // Penjualan keluar dari TOKO yang sedang dibuka, bukan dari kategori:
+        // gamis dewasa punya dua toko, dan hanya satu di antaranya yang
+        // stoknya boleh berkurang.
+        const nota = await catatPenjualanToko(sesi.toko.id, baris, pembeli)
         // Nama baru langsung masuk saran, tanpa menunggu halaman dimuat ulang.
         if (pembeli && !saran.includes(pembeli)) setSaran([pembeli, ...saran])
         return `Nota ${nota.nomor} tersimpan · ${rupiah(nota.total)}`

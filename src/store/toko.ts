@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Kategori } from '../lib/types'
+import type { Sesi, Tempat } from '../lib/types'
 
 const KUNCI = 'fathia-stok:toko'
 
@@ -7,6 +7,10 @@ const KUNCI = 'fathia-stok:toko'
  * Pilihan toko disimpan di perangkat, bukan di akun. HP yang dipakai di toko
  * gamis anak akan selalu terbuka sebagai toko gamis anak, sampai ada yang
  * keluar dan memilih toko lain saat login.
+ *
+ * Yang disimpan sekarang id TOKO, bukan id kategori. Sejak gamis dewasa punya
+ * dua toko, kategori tidak lagi cukup untuk tahu rak mana yang sedang dipegang
+ * — dan salah toko berarti stok toko sebelah yang berkurang.
  *
  * localStorage bisa gagal (mode privat, penyimpanan diblokir), jadi semua
  * akses dibungkus try/catch — kalau gagal, aplikasi tetap jalan, cuma pilihan
@@ -29,31 +33,47 @@ function tulis(id: string | null) {
   }
 }
 
+/**
+ * Merangkai satu sesi kerja dari sebuah toko: gudang kategorinya ikut terbawa,
+ * karena hampir setiap halaman butuh keduanya berdampingan — dan gudang itulah
+ * yang dipakai bersama dengan toko sebelah.
+ */
+export function buatSesi(toko: Tempat | null, semua: Tempat[]): Sesi | null {
+  if (!toko || toko.jenis !== 'toko' || !toko.kategori) return null
+  return {
+    toko,
+    gudang: semua.find((t) => t.kategori_id === toko.kategori_id && t.jenis === 'gudang') ?? null,
+    kategori: toko.kategori,
+    tokoSekategori: semua.filter((t) => t.kategori_id === toko.kategori_id && t.jenis === 'toko')
+      .length,
+  }
+}
+
 interface TokoState {
-  /** id yang tersimpan di perangkat; dipakai untuk mencocokkan ke daftar */
+  /** id toko yang tersimpan di perangkat; dipakai untuk mencocokkan ke daftar */
   tokoId: string | null
-  /** kategori lengkap hasil pencocokan; null berarti belum dipilih */
-  toko: Kategori | null
+  /** sesi lengkap hasil pencocokan; null berarti belum dipilih */
+  sesi: Sesi | null
   /** dipilih orang di layar login */
-  pilihToko: (k: Kategori) => void
-  /** dipasang App setelah daftar kategori termuat, tanpa menulis ulang */
-  pasangToko: (k: Kategori | null) => void
+  pilihToko: (toko: Tempat, semua: Tempat[]) => void
+  /** dipasang App setelah daftar tempat termuat, tanpa menulis ulang */
+  pasangSesi: (s: Sesi | null) => void
   lupakanToko: () => void
 }
 
 export const useToko = create<TokoState>((set) => ({
   tokoId: baca(),
-  toko: null,
+  sesi: null,
 
-  pilihToko: (k) => {
-    tulis(k.id)
-    set({ tokoId: k.id, toko: k })
+  pilihToko: (toko, semua) => {
+    tulis(toko.id)
+    set({ tokoId: toko.id, sesi: buatSesi(toko, semua) })
   },
 
-  pasangToko: (k) => set({ toko: k }),
+  pasangSesi: (s) => set({ sesi: s }),
 
   lupakanToko: () => {
     tulis(null)
-    set({ tokoId: null, toko: null })
+    set({ tokoId: null, sesi: null })
   },
 }))

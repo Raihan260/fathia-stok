@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ambilMutasi, cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
-import type { Mutasi, Produk, Varian } from '../lib/types'
-import { LABEL_MUTASI, pcs, rupiah, statusDari, umurHitung } from '../lib/types'
+import type { Mutasi, Produk, Sesi, Varian } from '../lib/types'
+import { LABEL_MUTASI, pcs, rupiah, statusDari, stokDi, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
 /**
@@ -14,7 +14,7 @@ import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
  * jadi alasan sistem ini dibuat: berapa harganya, dan masih ada berapa.
  */
 export default function Cari() {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [q, setQ] = useState('')
   const [hasil, setHasil] = useState<Produk[]>([])
   const [sibuk, setSibuk] = useState(false)
@@ -27,16 +27,25 @@ export default function Cari() {
    * dilakukan adalah melihat daftarnya, bukan mengetik.
    */
   useEffect(() => {
-    if (!toko) {
+    if (!sesi) {
       setHasil([])
       return
     }
     const kosong = q.trim() === ''
+    const kat = sesi.kategori.id
+    const tokoId = sesi.toko.id
     setSibuk(true)
 
     async function muat() {
       try {
-        setHasil(kosong ? await produkPerKategori(toko!.id) : await cariProduk(q, toko!.id))
+        // Disaring ke produk yang memang dijual di toko ini: sebagian model
+        // cuma ada di salah satu toko, dan memunculkan yang lain cuma bikin
+        // daftarnya panjang tanpa guna.
+        setHasil(
+          kosong
+            ? await produkPerKategori(kat, true, tokoId)
+            : await cariProduk(q, kat, tokoId),
+        )
         setGalat(null)
       } catch (err) {
         setGalat(pesanGalat(err))
@@ -51,7 +60,7 @@ export default function Cari() {
     }
     const t = setTimeout(() => void muat(), 250)
     return () => clearTimeout(t)
-  }, [q, toko?.id])
+  }, [q, sesi?.toko.id, sesi?.kategori.id])
 
   return (
     <div className="space-y-4">
@@ -62,7 +71,7 @@ export default function Cari() {
           onChange={(e) => setQ(e.target.value)}
           type="search"
           inputMode="search"
-          placeholder={toko ? `Cari di ${toko.nama}…` : 'Ketik kode atau nama…'}
+          placeholder={sesi ? `Cari di ${sesi.kategori.nama}…` : 'Ketik kode atau nama…'}
           className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3.5 text-lg outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-100"
         />
       </div>
@@ -75,7 +84,7 @@ export default function Cari() {
         <Kosong
           teks={
             q.trim() === ''
-              ? `Belum ada produk di ${toko?.nama ?? 'toko ini'}.`
+              ? `Belum ada produk di ${sesi?.kategori.nama ?? 'toko ini'}.`
               : `Tidak ada produk yang cocok dengan "${q}".`
           }
         />
@@ -87,14 +96,14 @@ export default function Cari() {
 
       <div className="space-y-4">
         {hasil.map((p) => (
-          <KartuProduk key={p.id} produk={p} />
+          <KartuProduk key={p.id} produk={p} sesi={sesi} />
         ))}
       </div>
     </div>
   )
 }
 
-function KartuProduk({ produk }: { produk: Produk }) {
+function KartuProduk({ produk, sesi }: { produk: Produk; sesi: Sesi | null }) {
   const [buka, setBuka] = useState<string | null>(null)
   const batas = produk.kategori?.batas_menipis ?? 24
 
@@ -133,12 +142,20 @@ function KartuProduk({ produk }: { produk: Produk }) {
                 {rupiah(v.harga_grosir)}
               </span>
               <span className="flex flex-col items-end gap-0.5">
-                <Jumlah label="Toko" jumlah={v.jumlah_toko} batas={batas} />
-                <Jumlah label="Gudang" jumlah={v.jumlah_gudang} batas={batas} />
+                <Jumlah
+                  label="Toko"
+                  jumlah={stokDi(v, sesi?.toko.id)?.jumlah ?? 0}
+                  batas={batas}
+                />
+                <Jumlah
+                  label="Gudang"
+                  jumlah={stokDi(v, sesi?.gudang?.id)?.jumlah ?? 0}
+                  batas={batas}
+                />
               </span>
             </button>
 
-            {buka === v.id && <Rincian varian={v} batas={batas} />}
+            {buka === v.id && <Rincian varian={v} batas={batas} sesi={sesi} />}
           </li>
         ))}
       </ul>
@@ -156,26 +173,36 @@ function Jumlah({ label, jumlah, batas }: { label: string; jumlah: number; batas
   )
 }
 
-function Rincian({ varian, batas }: { varian: Varian; batas: number }) {
+function Rincian({
+  varian,
+  batas,
+  sesi,
+}: {
+  varian: Varian
+  batas: number
+  sesi: Sesi | null
+}) {
   const [riwayat, setRiwayat] = useState<Mutasi[] | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
 
-  const umurToko = umurHitung(varian.toko_dihitung_at)
-  const umurGudang = umurHitung(varian.gudang_dihitung_at)
+  const diToko = stokDi(varian, sesi?.toko.id)
+  const diGudang = stokDi(varian, sesi?.gudang?.id)
+  const umurToko = umurHitung(diToko?.dihitung_at ?? null)
+  const umurGudang = umurHitung(diGudang?.dihitung_at ?? null)
 
   return (
     <div className="space-y-3 bg-stone-50 px-4 py-3">
       <div className="space-y-1 text-xs">
         <BarisStok
           label="Toko"
-          jumlah={varian.jumlah_toko}
+          jumlah={diToko?.jumlah ?? 0}
           batas={batas}
           umur={umurToko.teks}
           basi={umurToko.basi}
         />
         <BarisStok
           label="Gudang"
-          jumlah={varian.jumlah_gudang}
+          jumlah={diGudang?.jumlah ?? 0}
           batas={batas}
           umur={umurGudang.teks}
           basi={umurGudang.basi}
@@ -204,10 +231,13 @@ function Rincian({ varian, batas }: { varian: Varian; batas: number }) {
           {riwayat.map((m) => (
             <li key={m.id} className="flex justify-between gap-2">
               <span>{LABEL_MUTASI[m.jenis]}</span>
+              {/* Terbaca sebagai perpindahan, bukan dua selisih yang harus
+                  dirangkai sendiri di kepala: "12 gudang → Toko 2". */}
               <span className="tabular-nums">
-                {m.delta_toko !== 0 && `toko ${m.delta_toko > 0 ? '+' : ''}${m.delta_toko}`}
-                {m.delta_toko !== 0 && m.delta_gudang !== 0 && ', '}
-                {m.delta_gudang !== 0 && `gudang ${m.delta_gudang > 0 ? '+' : ''}${m.delta_gudang}`}
+                {m.jumlah ?? 0}
+                {m.dari?.nama ? ` ${m.dari.nama}` : ''}
+                {m.dari?.nama || m.ke?.nama ? ' → ' : ''}
+                {m.ke?.nama ?? (m.dari?.nama ? 'keluar' : '')}
               </span>
               <span className="shrink-0 text-stone-400">
                 {new Date(m.created_at).toLocaleDateString('id-ID', {

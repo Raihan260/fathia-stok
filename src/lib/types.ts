@@ -12,20 +12,82 @@ export interface Kategori {
   urutan: number
 }
 
+export type JenisTempat = 'toko' | 'gudang'
+
+/**
+ * Satu tempat fisik: sebuah toko, atau gudang milik kategorinya.
+ *
+ * Dulu "toko" dan "gudang" cuma dua kolom angka di tiap ukuran. Bentuk itu
+ * muat tepat dua tempat dan tidak bisa lebih — padahal gamis dewasa punya dua
+ * toko yang berbagi satu gudang. Sekarang tempat jadi barisnya sendiri, jadi
+ * satu kategori boleh punya berapa pun toko.
+ */
+export interface Tempat {
+  id: string
+  kategori_id: string
+  nama: string
+  jenis: JenisTempat
+  urutan: number
+  aktif: boolean
+  kategori?: Kategori | null
+}
+
+/** Stok satu ukuran di satu tempat. */
+export interface StokBaris {
+  lokasi_id: string
+  jumlah: number
+  dihitung_at: string | null
+}
+
 export interface Varian {
   id: string
   produk_id: string
   ukuran: string
   urutan: number
   harga_grosir: number
-  jumlah_toko: number
-  jumlah_gudang: number
-  toko_dihitung_at: string | null
-  gudang_dihitung_at: string | null
   updated_at: string
+  /** Satu baris per tempat milik kategorinya. */
+  stok: StokBaris[]
 }
 
-export type Lokasi = 'toko' | 'gudang'
+/**
+ * Stok sebuah ukuran di sebuah tempat.
+ *
+ * Mengembalikan `undefined`, bukan nol, kalau barisnya tidak ada — karena
+ * "tidak dijual di sini" dan "dijual di sini tapi habis" adalah dua hal
+ * berbeda, dan menyamakannya akan membuat barang yang tidak pernah dijual di
+ * sebuah toko ikut muncul sebagai barang kosong di sana.
+ */
+export function stokDi(v: Varian, lokasiId: string | null | undefined): StokBaris | undefined {
+  if (!lokasiId) return undefined
+  return v.stok?.find((s) => s.lokasi_id === lokasiId)
+}
+
+/** Nol kalau tidak dijual di tempat itu — untuk hitung-hitungan ringkas. */
+export const jumlahDi = (v: Varian, lokasiId: string | null | undefined) =>
+  stokDi(v, lokasiId)?.jumlah ?? 0
+
+/**
+ * Nama toko sebagaimana ditulis di layar.
+ *
+ * Kategori yang cuma punya satu toko tidak perlu embel-embel: "Gamis Anak
+ * Perempuan" sudah menunjuk ke satu tempat. Yang punya dua baru butuh
+ * pembeda, dan di situ nama tokonya ikut disebut.
+ */
+export function labelTempat(t: Tempat, tokoSekategori: number): string {
+  const kat = t.kategori?.nama ?? ''
+  if (t.jenis === 'gudang') return kat ? `Gudang ${kat}` : 'Gudang'
+  return tokoSekategori > 1 && t.nama ? `${kat} — ${t.nama}` : kat || t.nama
+}
+
+/** Tempat kerja satu sesi: toko yang dipilih, plus gudang kategorinya. */
+export interface Sesi {
+  toko: Tempat
+  gudang: Tempat | null
+  kategori: Kategori
+  /** Berapa toko yang dimiliki kategori ini — menentukan cara menamainya. */
+  tokoSekategori: number
+}
 
 export type JenisMutasi =
   | 'jual'
@@ -38,13 +100,17 @@ export interface Mutasi {
   id: string
   varian_id: string
   jenis: JenisMutasi
-  delta_toko: number
-  delta_gudang: number
-  toko_setelah: number
-  gudang_setelah: number
+  jumlah: number | null
+  dari_lokasi_id: string | null
+  ke_lokasi_id: string | null
+  dari_setelah: number | null
+  ke_setelah: number | null
   catatan: string | null
   oleh: string | null
   created_at: string
+  /** Nama tempatnya, ikut terbawa supaya riwayat terbaca tanpa menebak id. */
+  dari?: { nama: string } | null
+  ke?: { nama: string } | null
 }
 
 /**
@@ -70,6 +136,9 @@ export interface Transaksi {
   catatan: string | null
   total: number
   created_at: string
+  lokasi_id: string | null
+  /** Nama toko asal nota; ikut tersimpan sejak satu kategori bisa punya dua. */
+  lokasi?: { nama: string } | null
   transaksi_item?: TransaksiItem[]
 }
 
@@ -81,10 +150,11 @@ export interface BarisRiwayat {
   kode: string
   nama: string
   ukuran: string
-  delta_toko: number
-  delta_gudang: number
-  toko_setelah: number
-  gudang_setelah: number
+  jumlah: number | null
+  dari: string | null
+  ke: string | null
+  dari_setelah: number | null
+  ke_setelah: number | null
   catatan: string | null
   oleh: string
   nota: string | null

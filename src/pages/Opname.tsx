@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { catatMutasiBanyak, hitungUlang, pesanGalat, produkPerKategori } from '../lib/api'
+import { catatPergerakan, hitungFisik, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
-import type { Lokasi, Produk } from '../lib/types'
-import { pcs, statusDari, umurHitung } from '../lib/types'
+import type { Produk } from '../lib/types'
+import { jumlahDi, pcs, statusDari, stokDi, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
 /**
@@ -37,10 +37,16 @@ const GAYA_MODE: Record<Mode, { judul: string; tombol: string; aktif: string; is
 }
 
 export default function Opname() {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [daftar, setDaftar] = useState<Produk[]>([])
   const [q, setQ] = useState('')
-  const [lokasi, setLokasi] = useState<Lokasi>('gudang')
+  /**
+   * Tempat yang sedang dihitung. Pilihannya hanya gudang kategori ini dan toko
+   * yang sedang dibuka — bukan seluruh toko. Sesi memang sengaja dikunci ke
+   * satu toko supaya tidak ada yang tanpa sadar mengubah stok toko sebelah,
+   * dan halaman ini tidak boleh jadi pintu belakangnya.
+   */
+  const [lokasiId, setLokasiId] = useState<string | null>(null)
   /**
    * Angka yang sama berarti dua hal berbeda tergantung mode, jadi modenya
    * dipilih sebelum mengetik, bukan diketik sebagai tanda "+": keypad angka
@@ -54,11 +60,13 @@ export default function Opname() {
   const [kabar, setKabar] = useState<string | null>(null)
 
   function muat() {
-    if (!toko) return
+    if (!sesi) return
     setSibuk(true)
     setDraf({})
     setKabar(null)
-    produkPerKategori(toko.id)
+    // Tanpa saringan toko: gudang memuat seluruh produk kategorinya, termasuk
+    // yang cuma dijual di toko sebelah. Penyaringannya menyusul per tempat.
+    produkPerKategori(sesi.kategori.id)
       .then((d) => {
         setDaftar(d)
         setGalat(null)
@@ -70,16 +78,29 @@ export default function Opname() {
   useEffect(() => {
     muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toko?.id])
+  }, [sesi?.kategori.id])
+
+  // Gudang jadi pilihan awal: itu yang paling sering dihitung, dan barang baru
+  // dari produksi selalu masuk lewat sana.
+  useEffect(() => {
+    if (!sesi) return
+    setLokasiId((lama) =>
+      lama === sesi.gudang?.id || lama === sesi.toko.id
+        ? lama
+        : (sesi.gudang?.id ?? sesi.toko.id),
+    )
+  }, [sesi?.gudang?.id, sesi?.toko.id])
 
   // Ganti lokasi atau mode mengosongkan draf. Angka toko tidak boleh tersimpan
   // ke gudang, dan "120" berarti hal yang sangat berbeda di tiap mode.
   useEffect(() => {
     setDraf({})
     setKabar(null)
-  }, [lokasi, mode])
+  }, [lokasiId, mode])
 
-  const kolom = lokasi === 'toko' ? 'jumlah_toko' : 'jumlah_gudang'
+  const diGudang = lokasiId != null && lokasiId === sesi?.gudang?.id
+  const namaTempat =
+    (lokasiId === sesi?.gudang?.id ? sesi?.gudang?.nama : sesi?.toko.nama) ?? 'tempat ini'
   // Nol sah saat menghitung (barangnya memang habis), tapi tidak berarti
   // apa-apa saat menambah.
   const terisi = Object.entries(draf).filter(
@@ -89,12 +110,18 @@ export default function Opname() {
   // Disaring di sisi aplikasi, bukan query ulang: satu toko sudah termuat
   // semua, dan angka yang sudah diketik tidak ikut hilang saat menyaring.
   const kueri = q.trim().toLowerCase()
-  const tampil = kueri
-    ? daftar.filter(
-        (p) =>
-          p.kode.toLowerCase().includes(kueri) || p.nama.toLowerCase().includes(kueri),
-      )
-    : daftar
+  // Hanya ukuran yang memang punya catatan stok di tempat ini. Ukuran yang
+  // tidak dijual di sebuah toko tidak boleh bisa dihitung di situ — kalau bisa,
+  // "tidak dijual di sini" diam-diam berubah jadi "stoknya nol".
+  const tampil = daftar
+    .map((p) => ({ ...p, varian: p.varian.filter((v) => stokDi(v, lokasiId)) }))
+    .filter((p) => p.varian.length > 0)
+    .filter(
+      (p) =>
+        !kueri ||
+        p.kode.toLowerCase().includes(kueri) ||
+        p.nama.toLowerCase().includes(kueri),
+    )
 
   async function simpanSemua() {
     if (terisi.length === 0) {
@@ -121,23 +148,26 @@ export default function Opname() {
 
     let berhasil = 0
     try {
-      if (mode === 'tambah' && lokasi === 'gudang') {
+      if (!lokasiId) throw new Error('Tempatnya belum dipilih')
+
+      if (mode === 'tambah' && diGudang) {
         // Barang baru dari produksi: tercatat sebagai barang masuk, bukan
         // koreksi, supaya nanti bisa dibedakan dari catatan yang meleset.
-        await catatMutasiBanyak('barang_masuk', baris)
+        await catatPergerakan('barang_masuk', baris, { ke: lokasiId })
         berhasil = baris.length
       } else if (mode === 'tambah' || mode === 'kurang') {
         // Di toko tidak ada "barang masuk" — barang sampai ke rak lewat gudang,
         // jadi kelebihan di sana artinya catatannya yang meleset. Pengurangan
         // di mana pun juga koreksi: kejadiannya tidak terlacak sistem.
-        await catatMutasiBanyak('koreksi', baris, {
-          lokasi,
-          kurang: mode === 'kurang',
-        })
+        await catatPergerakan(
+          'koreksi',
+          baris,
+          mode === 'kurang' ? { dari: lokasiId } : { ke: lokasiId },
+        )
         berhasil = baris.length
       } else {
         for (const [varianId, nilai] of terisi) {
-          await hitungUlang(varianId, lokasi, Number(nilai))
+          await hitungFisik(varianId, lokasiId, Number(nilai))
           berhasil += 1
         }
       }
@@ -163,23 +193,22 @@ export default function Opname() {
         className="w-full rounded-lg border border-stone-300 px-4 py-2.5 outline-none focus:border-pink-600"
       />
 
+      {/* Gudangnya dipakai bersama dua toko gamis dewasa; tokonya hanya yang
+          sedang dibuka. Tidak ada jalan ke stok toko sebelah dari sini. */}
       <div className="flex overflow-hidden rounded-lg ring-1 ring-stone-300">
-        {(
-          [
-            ['gudang', 'Gudang'],
-            ['toko', 'Toko'],
-          ] as const
-        ).map(([nilai, label]) => (
-          <button
-            key={nilai}
-            onClick={() => setLokasi(nilai)}
-            className={`flex-1 py-2 text-sm font-semibold ${
-              lokasi === nilai ? 'bg-stone-900 text-white' : 'bg-white text-stone-500'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {[sesi?.gudang, sesi?.toko]
+          .filter((t): t is NonNullable<typeof t> => Boolean(t))
+          .map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setLokasiId(t.id)}
+              className={`flex-1 py-2 text-sm font-semibold ${
+                lokasiId === t.id ? 'bg-stone-900 text-white' : 'bg-white text-stone-500'
+              }`}
+            >
+              {t.jenis === 'gudang' ? 'Gudang' : t.nama}
+            </button>
+          ))}
       </div>
 
       {/*
@@ -250,7 +279,7 @@ export default function Opname() {
       {sibuk ? (
         <Spinner />
       ) : daftar.length === 0 ? (
-        <Kosong teks={`Belum ada produk di ${toko?.nama ?? 'toko ini'}.`} />
+        <Kosong teks={`Belum ada produk di ${sesi?.kategori.nama ?? 'toko ini'}.`} />
       ) : tampil.length === 0 ? (
         <Kosong teks={`Tidak ada produk yang cocok dengan "${q}".`} />
       ) : (
@@ -267,10 +296,8 @@ export default function Opname() {
                 </div>
                 <ul className="space-y-2">
                   {p.varian.map((v) => {
-                    const sekarang = v[kolom]
-                    const umur = umurHitung(
-                      lokasi === 'toko' ? v.toko_dihitung_at : v.gudang_dihitung_at,
-                    )
+                    const sekarang = jumlahDi(v, lokasiId)
+                    const umur = umurHitung(stokDi(v, lokasiId)?.dihitung_at ?? null)
                     return (
                       <li key={v.id} className="flex items-center gap-3">
                         <span className="w-10 shrink-0 text-sm font-semibold text-stone-700">
@@ -336,7 +363,7 @@ export default function Opname() {
                   : mode === 'tambah'
                     ? 'Isi berapa yang bertambah'
                     : 'Isi berapa yang berkurang'
-                : `${terisi.length} ukuran siap · ${lokasi}`}
+                : `${terisi.length} ukuran siap · ${namaTempat}`}
             </span>
             <button
               onClick={() => void simpanSemua()}

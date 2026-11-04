@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   arsipkanProduk,
+  aturTokoProduk,
   cariProduk,
   hapusVarian,
   pesanGalat,
@@ -9,8 +10,9 @@ import {
   simpanVarian,
 } from '../lib/api'
 import { useToko } from '../store/toko'
-import type { Produk } from '../lib/types'
-import { rupiah } from '../lib/types'
+import type { Produk, Sesi, Tempat } from '../lib/types'
+import { rupiah, stokDi } from '../lib/types'
+import { ambilTempat } from '../lib/api'
 import { Galat, Kosong, Spinner } from '../components/ui'
 
 /**
@@ -19,7 +21,7 @@ import { Galat, Kosong, Spinner } from '../components/ui'
  * ada produk yang nyasar ke toko sebelah.
  */
 export default function Kelola() {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [daftar, setDaftar] = useState<Produk[]>([])
   const [q, setQ] = useState('')
   /** Arsip tidak punya pencarian sendiri — isinya sedikit, cukup didaftar. */
@@ -29,13 +31,17 @@ export default function Kelola() {
   const [edit, setEdit] = useState<Produk | 'baru' | null>(null)
 
   async function muat() {
-    if (!toko) return
+    if (!sesi) return
+    const kat = sesi.kategori.id
     setSibuk(true)
     try {
+      // Tanpa saringan toko: halaman ini memang mengurus seluruh produk
+      // kategorinya, termasuk yang cuma dijual di toko sebelah — justru di
+      // sinilah tempatnya mengatur toko mana yang menjual apa.
       if (lihatArsip) {
-        setDaftar(await produkPerKategori(toko.id, false))
+        setDaftar(await produkPerKategori(kat, false))
       } else {
-        setDaftar(q.trim() ? await cariProduk(q, toko.id) : await produkPerKategori(toko.id))
+        setDaftar(q.trim() ? await cariProduk(q, kat) : await produkPerKategori(kat))
       }
       setGalat(null)
     } catch (e) {
@@ -48,7 +54,7 @@ export default function Kelola() {
   useEffect(() => {
     void muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toko?.id, q, lihatArsip])
+  }, [sesi?.kategori.id, q, lihatArsip])
 
   async function pulihkan(p: Produk) {
     if (!confirm(`Pulihkan ${p.kode} ke daftar produk?`)) return
@@ -60,12 +66,11 @@ export default function Kelola() {
     }
   }
 
-  if (edit && toko) {
+  if (edit && sesi) {
     return (
       <FormProduk
         produk={edit === 'baru' ? null : edit}
-        kategoriId={toko.id}
-        presetUkuran={toko.preset_ukuran}
+        sesi={sesi}
         onSelesai={() => {
           setEdit(null)
           void muat()
@@ -116,7 +121,7 @@ export default function Kelola() {
           teks={
             lihatArsip
               ? 'Arsip kosong.'
-              : `Belum ada produk di ${toko?.nama ?? 'toko ini'}.`
+              : `Belum ada produk di ${sesi?.kategori.nama ?? 'toko ini'}.`
           }
         />
       ) : (
@@ -186,15 +191,15 @@ interface BarisVarian {
 
 function FormProduk({
   produk,
-  kategoriId,
-  presetUkuran,
+  sesi,
   onSelesai,
 }: {
   produk: Produk | null
-  kategoriId: string
-  presetUkuran: string[]
+  sesi: Sesi
   onSelesai: () => void
 }) {
+  const kategoriId = sesi.kategori.id
+  const presetUkuran = sesi.kategori.preset_ukuran
   const [kode, setKode] = useState(produk?.kode ?? '')
   const [nama, setNama] = useState(produk?.nama ?? '')
   const [catatan, setCatatan] = useState(produk?.catatan ?? '')
@@ -203,6 +208,36 @@ function FormProduk({
   )
   const [sibuk, setSibuk] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
+
+  /*
+   * Toko mana saja yang menjual produk ini.
+   *
+   * Sebagian model cuma ada di salah satu toko. Yang menyatakannya bukan kolom
+   * tersendiri melainkan ada-tidaknya baris stok di toko itu — "tidak dijual di
+   * sini" dan "dijual di sini tapi kosong" dua hal berbeda, dan menyamakannya
+   * akan membuat barang yang tidak pernah dijual di sebuah toko ikut muncul di
+   * sana sebagai barang kosong.
+   */
+  const [tokoSemua, setTokoSemua] = useState<Tempat[]>([])
+  const [tokoDipilih, setTokoDipilih] = useState<string[]>([])
+
+  useEffect(() => {
+    ambilTempat()
+      .then((semua) => {
+        const toko = semua.filter((t) => t.jenis === 'toko' && t.kategori_id === kategoriId)
+        setTokoSemua(toko)
+        // Produk baru dianggap dijual di semua toko kategorinya — itu keadaan
+        // yang paling sering, dan melepas satu lebih mudah daripada mencentang
+        // semua.
+        setTokoDipilih(
+          produk
+            ? toko.filter((t) => produk.varian.some((v) => stokDi(v, t.id))).map((t) => t.id)
+            : toko.map((t) => t.id),
+        )
+      })
+      .catch(() => setTokoSemua([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kategoriId, produk?.id])
 
   /** Isi otomatis dari preset ukuran toko ini — harga diisi belakangan. */
   function pakaiPreset() {
@@ -237,6 +272,10 @@ function FormProduk({
           harga_grosir: Number(v.harga.replace(/\D/g, '')) || 0,
         })
       }
+      // Dijalankan setelah ukurannya tersimpan: baris stok lahir per ukuran,
+      // jadi menentukan tokonya sebelum ukurannya ada tidak ada gunanya.
+      if (tokoSemua.length > 0) await aturTokoProduk(produkId, tokoDipilih)
+
       onSelesai()
     } catch (e) {
       setGalat(pesanGalat(e))
@@ -338,6 +377,42 @@ function FormProduk({
           </p>
         )}
       </div>
+
+      {/* Hanya muncul kalau kategorinya memang punya lebih dari satu toko.
+          Menanyakan "dijual di toko mana" saat tokonya cuma satu adalah
+          pertanyaan yang jawabannya sudah pasti. */}
+      {tokoSemua.length > 1 && (
+        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
+          <h2 className="font-semibold">Dijual di toko</h2>
+          <p className="mb-3 mt-1 text-xs text-stone-500">
+            Yang tidak dicentang tidak akan muncul di halaman Cari, Jual, dan
+            Ambil toko itu. Toko yang stoknya masih ada tidak bisa dilepas —
+            melepasnya sama saja menghilangkan barang yang betul-betul ada di
+            rak.
+          </p>
+          <ul className="space-y-1">
+            {tokoSemua.map((t) => (
+              <li key={t.id}>
+                <label className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-stone-50">
+                  <input
+                    type="checkbox"
+                    checked={tokoDipilih.includes(t.id)}
+                    onChange={(e) =>
+                      setTokoDipilih(
+                        e.target.checked
+                          ? [...tokoDipilih, t.id]
+                          : tokoDipilih.filter((x) => x !== t.id),
+                      )
+                    }
+                    className="h-5 w-5 shrink-0 accent-pink-700"
+                  />
+                  <span className="text-sm font-medium">{t.nama}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <button
         onClick={simpan}

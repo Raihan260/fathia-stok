@@ -14,25 +14,64 @@ sebenarnya ("ini masih ada atau tidak") dan tahan kalau sesekali lupa update.
 
 ## Struktur data
 
-- `kategori` — satu kategori = satu toko fisik, jadi lokasi barang otomatis
-  ketahuan dari kategorinya. `preset_ukuran` dipakai untuk mengisi cepat saat
-  menambah produk baru.
+- `kategori` — satu lini produk: gamis anak, gamis dewasa, denim anak.
+  `preset_ukuran` dipakai untuk mengisi cepat saat menambah produk baru.
+- `lokasi` — tempat fisik: toko-toko dan **satu** gudang milik kategori itu
+  (ditegakkan oleh indeks unik parsial). Satu kategori boleh punya berapa pun
+  toko; gamis dewasa punya dua yang berbagi satu gudang.
 - `produk` — `kode` adalah yang dicetak di hangtag dan jadi pegangan utama saat
   mencari.
 - `varian` — satu baris per ukuran. **Harga ada di sini**, karena harga beda per
-  ukuran. Ukuran disimpan sebagai teks bebas (`1`, `5`, `S`, `XL`, `All size`)
-  dengan kolom `urutan` supaya tampilannya urut benar, bukan alfabetis.
+  ukuran — dan harganya sama di semua toko. Ukuran disimpan sebagai teks bebas
+  (`456`, `SML`, `XLXXL`, `All size`); urutannya dihitung di aplikasi, bukan
+  dibaca dari kolom.
+- `stok` — satu baris per pasangan (ukuran, lokasi). **Inilah sumber kebenaran
+  jumlah barang.**
+
+### Kenapa stok jadi baris, bukan kolom
+
+Dulu stok hidup sebagai dua kolom di tiap ukuran: `jumlah_toko` dan
+`jumlah_gudang`. Dua kolom berarti dua tempat, selamanya — dan tidak ada
+tambalan yang membuatnya jadi tiga. Begitu gamis dewasa punya dua toko dengan
+satu gudang bersama, bentuk itu tidak bisa menampungnya.
+
+Kolom-kolom lama **sengaja belum dihapus**. Selama masa peralihan keduanya
+hidup berdampingan dan dijaga sinkron oleh trigger `jembatan_varian_ke_stok`,
+supaya aplikasi versi lama yang masih terbuka di HP mana pun tidak menulis ke
+tempat yang salah. Jembatan itu dan kolom lamanya dibuang nanti, lewat langkah
+tersendiri yang disetujui terpisah.
+
+### "Tidak dijual di sini" bukan "stoknya nol"
+
+Sebagian model cuma ada di salah satu toko. Yang menyatakannya bukan kolom
+tersendiri melainkan **ada atau tidaknya baris stok** di toko itu. Dua keadaan
+yang kelihatan mirip tapi berbeda: stok nol berarti barangnya habis, tidak ada
+barisnya berarti toko itu memang tidak menjualnya. Menyamakan keduanya akan
+membuat daftar tiap toko dipenuhi barang yang tidak pernah ada di sana.
+
+Diatur lewat `atur_toko_produk()`, dari halaman Kelola. Melepas toko yang
+stoknya masih ada ditolak — melepasnya sama saja menghilangkan barang yang
+betul-betul ada di rak.
 
 ## Satu sesi = satu toko
 
-Tiap kategori punya toko fisik sendiri di lokasi berbeda. Toko dipilih sekali
-saat login, lalu seluruh aplikasi terkunci ke toko itu: tidak ada chip kategori
-di halaman mana pun, dan **pencarian hanya menjangkau kategori toko itu**.
-Pencarian lintas kategori adalah sumber salah input yang paling berbahaya —
-bisa terjadi tanpa si pemakai merasa berpindah ke mana-mana.
+Toko dipilih sekali saat login, lalu seluruh aplikasi terkunci ke toko itu:
+tidak ada chip kategori di halaman mana pun, dan **pencarian hanya menjangkau
+produk yang dijual di toko itu**. Pencarian lintas toko adalah sumber salah
+input yang paling berbahaya — bisa terjadi tanpa si pemakai merasa berpindah ke
+mana-mana.
+
+Yang dipilih dan disimpan adalah **toko**, bukan kategori. Sejak gamis dewasa
+punya dua toko, kategori tidak lagi menunjuk ke satu rak. Gudang kategorinya
+ikut terbawa otomatis, karena hampir semua halaman butuh keduanya
+berdampingan — dan gudang itulah yang dipakai bersama dengan toko sebelah.
+
+Halaman Opname pun hanya menawarkan gudang kategori ini dan toko yang sedang
+dibuka. Tidak ada jalan ke stok toko sebelah dari mana pun di aplikasi.
 
 Nama toko ditampilkan tetap di header supaya salah toko ketahuan sebelum
-sempat salah input. Produk baru otomatis masuk kategori toko yang aktif.
+sempat salah input. Kategori yang cuma punya satu toko tampil dengan nama
+kategorinya saja; yang punya dua baru diberi pembeda ("Gamis Dewasa — Toko 2").
 
 Pilihan toko disimpan di perangkat (`localStorage`), jadi HP yang dipakai di
 toko gamis anak akan selalu terbuka sebagai toko itu. Muat ulang halaman tidak

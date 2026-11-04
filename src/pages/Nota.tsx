@@ -8,23 +8,23 @@ import { Galat, Kosong, Spinner } from '../components/ui'
 
 /** Daftar nota toko ini, terbaru dulu, dikelompokkan per tanggal. */
 export default function Nota() {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [daftar, setDaftar] = useState<Transaksi[]>([])
   const [q, setQ] = useState('')
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!toko) return
+    if (!sesi) return
     setSibuk(true)
-    ambilTransaksi(toko.id)
+    ambilTransaksi(sesi.kategori.id)
       .then((d) => {
         setDaftar(d)
         setGalat(null)
       })
       .catch((e) => setGalat(pesanGalat(e)))
       .finally(() => setSibuk(false))
-  }, [toko?.id])
+  }, [sesi?.kategori.id])
 
   const kueri = q.trim().toLowerCase()
   const tampil = kueri
@@ -82,8 +82,16 @@ export default function Nota() {
                       <span className="shrink-0 rounded bg-stone-900 px-2 py-0.5 font-mono text-xs font-bold text-white">
                         {t.nomor}
                       </span>
-                      <span className="flex-1 truncate text-sm">
+                      <span className="min-w-0 flex-1 truncate text-sm">
                         {t.pembeli ?? <span className="text-stone-400">tanpa nama</span>}
+                        {/* Nota satu kategori bisa datang dari dua toko, jadi
+                            asalnya disebut — tanpa itu dua nota yang mirip
+                            tidak bisa dibedakan sama sekali. */}
+                        {t.lokasi?.nama && (
+                          <span className="block text-[11px] text-stone-400">
+                            {t.lokasi.nama}
+                          </span>
+                        )}
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block text-sm font-bold tabular-nums">
@@ -143,6 +151,9 @@ export function NotaDetail() {
           <p className="mt-2 text-sm">
             {nota.pembeli ?? <span className="text-stone-400">Tanpa nama pembeli</span>}
           </p>
+          {nota.lokasi?.nama && (
+            <p className="mt-0.5 text-xs text-stone-500">{nota.lokasi.nama}</p>
+          )}
         </header>
 
         <ul className="divide-y divide-stone-100">

@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
-import type { Lokasi, Produk, Varian } from '../lib/types'
-import { pcs, rupiah, statusDari } from '../lib/types'
+import type { Produk, Varian } from '../lib/types'
+import { jumlahDi, pcs, rupiah, statusDari } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
 
 /**
@@ -24,7 +24,7 @@ export interface BarisKeranjang {
 
 export default function Keranjang({
   judul,
-  sumber,
+  sumberId,
   tampilkanHarga,
   labelSimpan,
   petunjuk,
@@ -34,8 +34,12 @@ export default function Keranjang({
   atas,
 }: {
   judul: string
-  /** Stok mana yang berkurang — yang ditampilkan dan dijadikan patokan. */
-  sumber: Lokasi
+  /**
+   * Tempat yang stoknya berkurang — sekaligus angka yang ditampilkan sebagai
+   * patokan. Jual mengambil dari toko yang sedang dibuka, Ambil dari gudang
+   * kategorinya.
+   */
+  sumberId: string | null
   tampilkanHarga: boolean
   labelSimpan: string
   petunjuk: string
@@ -49,7 +53,7 @@ export default function Keranjang({
   /** Slot di bawah judul — dipakai halaman Jual untuk tautan riwayat nota. */
   atas?: React.ReactNode
 }) {
-  const toko = useToko((s) => s.toko)
+  const sesi = useToko((s) => s.sesi)
   const [q, setQ] = useState('')
   const [hasil, setHasil] = useState<Produk[]>([])
   const [buka, setBuka] = useState<string | null>(null)
@@ -104,12 +108,18 @@ export default function Keranjang({
    * separuh layar, padahal daftar produknya sudah tampil tanpa perlu diketik.
    */
   useEffect(() => {
-    if (!toko) return
+    if (!sesi) return
+    const kat = sesi.kategori.id
+    const tokoId = sesi.toko.id
     const kosong = q.trim() === ''
     setSibuk(true)
     async function muat() {
       try {
-        setHasil(kosong ? await produkPerKategori(toko!.id) : await cariProduk(q, toko!.id))
+        setHasil(
+          kosong
+            ? await produkPerKategori(kat, true, tokoId)
+            : await cariProduk(q, kat, tokoId),
+        )
         setGalat(null)
       } catch (e) {
         setGalat(pesanGalat(e))
@@ -123,16 +133,16 @@ export default function Keranjang({
     }
     const t = setTimeout(() => void muat(), 250)
     return () => clearTimeout(t)
-  }, [q, toko?.id])
+  }, [q, sesi?.toko.id, sesi?.kategori.id])
 
-  const kolom = sumber === 'toko' ? 'jumlah_toko' : 'jumlah_gudang'
+
 
   /** Sisa yang masih boleh diambil: stok tercatat dikurangi yang sudah di daftar. */
   function sisa(v: Varian) {
     const sudah = keranjang
       .filter((b) => b.varianId === v.id)
       .reduce((t, b) => t + b.jumlah, 0)
-    return v[kolom] - sudah
+    return jumlahDi(v, sumberId) - sudah
   }
 
   function tambahBaris(p: Produk, isian: Record<string, string>) {
@@ -185,7 +195,7 @@ export default function Keranjang({
       setTerakhir(null)
       setDaftarTerbuka(false)
       // Muat ulang supaya stok di layar ikut turun.
-      if (toko) setHasil(await produkPerKategori(toko.id))
+      if (sesi) setHasil(await produkPerKategori(sesi.kategori.id, true, sesi.toko.id))
     } catch (e) {
       setGalat(pesanGalat(e))
     } finally {
@@ -242,7 +252,7 @@ export default function Keranjang({
               {buka === p.id && (
                 <FormUkuran
                   produk={p}
-                  kolom={kolom}
+                  sumberId={sumberId}
                   batas={p.kategori?.batas_menipis ?? 24}
                   sisa={sisa}
                   tampilkanHarga={tampilkanHarga}
@@ -396,14 +406,14 @@ function Panah({ terbuka }: { terbuka: boolean }) {
 
 function FormUkuran({
   produk,
-  kolom,
+  sumberId,
   batas,
   sisa,
   tampilkanHarga,
   onTambah,
 }: {
   produk: Produk
-  kolom: 'jumlah_toko' | 'jumlah_gudang'
+  sumberId: string | null
   batas: number
   sisa: (v: Varian) => number
   tampilkanHarga: boolean
@@ -425,7 +435,7 @@ function FormUkuran({
                 {v.ukuran}
               </span>
               <span className="flex flex-1 items-center gap-1.5 text-xs">
-                <TitikStatus status={statusDari(v[kolom], batas)} />
+                <TitikStatus status={statusDari(jumlahDi(v, sumberId), batas)} />
                 <span className="tabular-nums text-stone-600">{pcs(tersisa)}</span>
                 {tampilkanHarga && (
                   <span className="text-stone-400">· {rupiah(v.harga_grosir)}</span>
