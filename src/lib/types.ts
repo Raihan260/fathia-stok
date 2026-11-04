@@ -77,7 +77,9 @@ export const jumlahDi = (v: Varian, lokasiId: string | null | undefined) =>
 export function labelTempat(t: Tempat, tokoSekategori: number): string {
   const kat = t.kategori?.nama ?? ''
   if (t.jenis === 'gudang') return kat ? `Gudang ${kat}` : 'Gudang'
-  return tokoSekategori > 1 && t.nama ? `${kat} — ${t.nama}` : kat || t.nama
+  // Kurung, bukan tanda pisah: nama tokonya adalah keterangan tempat
+  // ("Gamis Dewasa (Cideng)"), bukan bagian kedua dari sebuah nama majemuk.
+  return tokoSekategori > 1 && t.nama ? `${kat} (${t.nama})` : kat || t.nama
 }
 
 /** Tempat kerja satu sesi: toko yang dipilih, plus gudang kategorinya. */
