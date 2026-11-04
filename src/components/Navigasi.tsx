@@ -58,10 +58,12 @@ function IkonLainnya() {
 export default function Navigasi({
   admin,
   namaToko,
+  onGantiToko,
   onKeluar,
 }: {
   admin: boolean
   namaToko: string
+  onGantiToko: () => void
   onKeluar: () => void
 }) {
   const [buka, setBuka] = useState(false)
@@ -118,17 +120,32 @@ export default function Navigasi({
                 )}
               </nav>
 
-              <div className="mt-3 flex items-center gap-3 border-t border-stone-200 pt-3">
+              {/*
+                Dua tindakan yang sangat berbeda ongkosnya, jadi dipisah dan
+                dinamai menurut TUJUANNYA, bukan tindakannya. "Keluar" dan
+                "Logout" artinya sama persis — dua tombol bersebelahan dengan
+                nama bersinonim tidak bisa dibedakan tanpa menebak, dan
+                menebak di sini berarti ketik ulang email dan sandi.
+              */}
+              <div className="mt-3 border-t border-stone-200 pt-3">
+                <BarisPanel
+                  label="Ganti toko"
+                  ket="Pindah toko tanpa keluar dari akun"
+                  onClick={onGantiToko}
+                />
+              </div>
+
+              <div className="mt-1 flex items-center gap-3 border-t border-stone-200 pt-3">
                 <span className="flex-1 truncate text-xs text-stone-500">
                   {namaToko} · {admin ? 'Admin' : 'Staf'}
                 </span>
                 <button
                   onClick={() => {
-                    if (confirm('Keluar dari akun ini?')) onKeluar()
+                    if (confirm('Keluar dari akun ini?\n\nUntuk sekadar pindah toko, pakai "Ganti toko".')) onKeluar()
                   }}
                   className="rounded-lg px-3 py-2 text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-rose-700"
                 >
-                  Keluar
+                  Keluar akun
                 </button>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
+import { useDraf } from '../store/draf'
 import type { Produk, Varian } from '../lib/types'
 import { jumlahDi, pcs, rupiah, statusDari } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
@@ -89,6 +90,19 @@ export default function Keranjang({
   const panelRef = useRef<HTMLDivElement>(null)
   const [tinggiPanel, setTinggiPanel] = useState(0)
   const adaIsi = keranjang.length > 0
+
+  /*
+   * Melapor ke luar kalau ada daftar yang belum disimpan. Berpindah toko akan
+   * membuangnya, dan itu harus disebutkan sebelum terjadi — bukan sesudah.
+   */
+  const setDraf = useDraf((s) => s.setDraf)
+  useEffect(() => {
+    setDraf(
+      judul,
+      keranjang.length > 0 ? `${judul}: ${keranjang.length} baris belum disimpan` : null,
+    )
+    return () => setDraf(judul, null)
+  }, [judul, keranjang.length, setDraf])
 
   useLayoutEffect(() => {
     const el = panelRef.current

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { catatPergerakan, hitungFisik, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
+import { useDraf } from '../store/draf'
 import type { Produk } from '../lib/types'
 import { jumlahDi, pcs, statusDari, stokDi, umurHitung } from '../lib/types'
 import { Galat, Kosong, Spinner, TitikStatus } from '../components/ui'
@@ -106,6 +107,17 @@ export default function Opname() {
   const terisi = Object.entries(draf).filter(
     ([, v]) => v.trim() !== '' && (mode === 'hitung' || Number(v) > 0),
   )
+
+  // Namanya sengaja beda dari setDraf milik halaman ini: yang ini melapor ke
+  // luar, yang itu menyimpan angka yang sedang diketik.
+  const laporDraf = useDraf((s) => s.setDraf)
+  useEffect(() => {
+    laporDraf(
+      'Opname',
+      terisi.length > 0 ? `Opname: ${terisi.length} ukuran belum disimpan` : null,
+    )
+    return () => laporDraf('Opname', null)
+  }, [terisi.length, laporDraf])
 
   // Disaring di sisi aplikasi, bukan query ulang: satu toko sudah termuat
   // semua, dan angka yang sudah diketik tidak ikut hilang saat menyaring.

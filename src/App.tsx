@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Navigasi from './components/Navigasi'
 import { useAuth } from './store/auth'
 import { buatSesi, useToko } from './store/toko'
+import { useDraf } from './store/draf'
 import { konfigurasiHilang } from './lib/supabase'
 import { ambilTempat, pesanGalat } from './lib/api'
 import type { Tempat } from './lib/types'
@@ -24,6 +25,8 @@ export default function App() {
 
   const [tempat, setTempat] = useState<Tempat[] | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
+  const [gantiToko, setGantiToko] = useState(false)
+  const draf = useDraf((s) => s.isi)
 
   useEffect(() => pasangListener(), [pasangListener])
 
@@ -55,6 +58,28 @@ export default function App() {
   async function keluarPenuh() {
     lupakanToko()
     await keluar()
+  }
+
+  /**
+   * Pindah toko dari dalam aplikasi, tanpa keluar akun.
+   *
+   * Memilih toko yang sedang dibuka tidak melakukan apa-apa — panelnya ditutup
+   * dan semua isian tetap utuh, sama seperti menekan Batal.
+   *
+   * Pindah ke toko LAIN memuat ulang aplikasinya. Terdengar kasar, tapi itu
+   * satu-satunya cara yang pasti: keranjang Jual, keranjang Ambil, dan draf
+   * Opname hidup di dalam komponennya masing-masing, dan membawanya ke toko
+   * baru berarti baris milik toko lama tersimpan ke stok toko yang salah —
+   * persis kekeliruan yang seluruh penguncian sesi ini dibuat untuk mencegah.
+   */
+  function pindahToko(t: Tempat) {
+    if (!tempat) return
+    if (t.id === sesi?.toko.id) {
+      setGantiToko(false)
+      return
+    }
+    pilihToko(t, tempat)
+    window.location.reload()
   }
 
   if (konfigurasiHilang) {
@@ -141,8 +166,28 @@ export default function App() {
         <Navigasi
           admin={admin}
           namaToko={namaToko}
+          onGantiToko={() => setGantiToko(true)}
           onKeluar={() => void keluarPenuh()}
         />
+
+        {/*
+          Ditumpuk di atas aplikasi, bukan menggantikannya. Kalau halaman kerja
+          ikut dilepas dari layar, menekan Batal pun akan membuang keranjang
+          yang sedang terisi — dan batal seharusnya tidak merusak apa pun.
+        */}
+        {gantiToko && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-50">
+            <PilihToko
+              tempat={tempat}
+              email={session.user.email}
+              tokoAktifId={sesi.toko.id}
+              peringatan={Object.values(draf)}
+              onPilih={pindahToko}
+              onBatal={() => setGantiToko(false)}
+              onKeluar={() => void keluarPenuh()}
+            />
+          </div>
+        )}
       </div>
     </BrowserRouter>
   )
