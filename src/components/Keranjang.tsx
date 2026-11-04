@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cariProduk, pesanGalat, produkPerKategori } from '../lib/api'
 import { useToko } from '../store/toko'
 import type { Lokasi, Produk, Varian } from '../lib/types'
@@ -59,6 +59,45 @@ export default function Keranjang({
   const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
   const [kabar, setKabar] = useState<string | null>(null)
+
+  /*
+   * Daftar belanja terlipat secara bawaan.
+   *
+   * Satu pembeli reseller bisa mengambil sepuluh model lebih, dan panel yang
+   * menampilkan semuanya sekaligus tumbuh sampai menutupi daftar produk serta
+   * kotak jumlahnya — persis saat tangan masih butuh keduanya. Saat
+   * mengumpulkan pesanan yang perlu terlihat hanya dua hal: sudah berapa, dan
+   * yang barusan masuk apa. Daftar lengkapnya baru berguna di akhir, waktu
+   * mengecek ulang sebelum menyimpan, dan itu satu ketukan jauhnya.
+   */
+  const [daftarTerbuka, setDaftarTerbuka] = useState(false)
+  const [terakhir, setTerakhir] = useState<string | null>(null)
+
+  /*
+   * Tinggi panel diukur, bukan ditebak.
+   *
+   * Sebelumnya ruang kosong di bawah halaman dipatok tetap (pb-40 = 160px)
+   * sementara tinggi panel ikut isi keranjang dan bisa dua kali lipatnya.
+   * Selisihnya berarti produk paling bawah berada di belakang panel: terlihat
+   * separuh, tidak bisa disentuh. Diukur begini, berapa pun tinggi panelnya
+   * halaman selalu menyisakan ruang yang pas.
+   */
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [tinggiPanel, setTinggiPanel] = useState(0)
+  const adaIsi = keranjang.length > 0
+
+  useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el) {
+      setTinggiPanel(0)
+      return
+    }
+    setTinggiPanel(el.offsetHeight)
+    if (typeof ResizeObserver === 'undefined') return
+    const pengamat = new ResizeObserver(() => setTinggiPanel(el.offsetHeight))
+    pengamat.observe(el)
+    return () => pengamat.disconnect()
+  }, [adaIsi, daftarTerbuka, pakaiPembeli])
 
   /*
    * Tidak difokuskan otomatis — di HP itu membuka keyboard dan menutupi
@@ -123,6 +162,9 @@ export default function Keranjang({
       }
       return gabung
     })
+    // Satu baris pengingat apa yang barusan masuk. Dengan daftar terlipat,
+    // ini yang menjawab "tadi kepencet atau tidak" tanpa membuka apa pun.
+    setTerakhir(`${baru[0].kode} ${baru.map((b) => `uk ${b.ukuran} ×${b.jumlah}`).join(', ')}`)
     setBuka(null)
     setKabar(null)
   }
@@ -140,6 +182,8 @@ export default function Keranjang({
       setKeranjang([])
       setPembeli('')
       setQ('')
+      setTerakhir(null)
+      setDaftarTerbuka(false)
       // Muat ulang supaya stok di layar ikut turun.
       if (toko) setHasil(await produkPerKategori(toko.id))
     } catch (e) {
@@ -153,7 +197,7 @@ export default function Keranjang({
   const totalHarga = keranjang.reduce((t, b) => t + b.jumlah * b.harga, 0)
 
   return (
-    <div className="space-y-4 pb-40">
+    <div className="space-y-4" style={{ paddingBottom: tinggiPanel + 72 }}>
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold">{judul}</h1>
         {atas}
@@ -210,72 +254,114 @@ export default function Keranjang({
         </ul>
       )}
 
-      {/* Daftar melayang di atas menu bawah supaya selalu terlihat tanpa scroll. */}
-      {keranjang.length > 0 && (
-        <div className="fixed inset-x-0 bottom-14 z-10 border-t border-stone-200 bg-white/97 backdrop-blur">
-          <div className="mx-auto max-w-2xl px-4 py-3">
-            <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-              {keranjang.map((b) => (
-                <li key={b.varianId} className="flex items-center gap-2">
-                  <span className="font-mono font-semibold">{b.kode}</span>
-                  <span className="text-stone-500">uk {b.ukuran}</span>
-                  <span className="font-semibold tabular-nums">× {b.jumlah}</span>
-                  {tampilkanHarga && (
-                    <span className="tabular-nums text-stone-500">
-                      {rupiah(b.jumlah * b.harga)}
-                    </span>
-                  )}
+      {/* Panel melayang di atas menu bawah supaya totalnya selalu terlihat. */}
+      {adaIsi && (
+        <div
+          ref={panelRef}
+          className="fixed inset-x-0 bottom-14 z-10 border-t border-stone-200 bg-white/97 backdrop-blur"
+        >
+          <div className="mx-auto max-w-2xl px-4 py-2.5">
+            {daftarTerbuka ? (
+              <>
+                {/* Kosongkan di sini, bukan di baris bawah: menghapus seluruh
+                    pesanan tidak boleh berdempetan dengan tombol yang paling
+                    sering dipencet, dan di HP sempit kehadirannya di bawah
+                    membuat total pcs terbelah jadi dua baris. */}
+                <div className="flex justify-end pb-1">
                   <button
-                    onClick={() =>
-                      setKeranjang((l) => l.filter((x) => x.varianId !== b.varianId))
-                    }
-                    className="ml-auto px-1 text-stone-400 hover:text-rose-600"
-                    aria-label={`Hapus ${b.kode} ukuran ${b.ukuran}`}
+                    onClick={() => setKeranjang([])}
+                    className="px-1 text-[11px] text-stone-400 hover:text-rose-600"
                   >
-                    ✕
+                    Kosongkan
                   </button>
-                </li>
-              ))}
-            </ul>
+                </div>
 
-            {/* Nama pembeli di sini, bukan di atas: diisi saat pesanan sudah
-                lengkap dan tangan tidak lagi sibuk memilih barang. */}
-            {pakaiPembeli && (
-              <div className="mt-2">
-                <input
-                  value={pembeli}
-                  onChange={(e) => setPembeli(e.target.value)}
-                  list="saran-pembeli"
-                  placeholder="Nama pembeli (boleh kosong)"
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pink-600"
-                />
-                <datalist id="saran-pembeli">
-                  {saranPembeli.map((n) => (
-                    <option key={n} value={n} />
+                {/* Dibatasi 45% tinggi layar, bukan tinggi tetap: di HP kecil
+                    tinggi tetap tetap bisa memakan seluruh layar. */}
+                <ul
+                  className="space-y-1 overflow-y-auto text-xs"
+                  style={{ maxHeight: '45vh' }}
+                >
+                  {keranjang.map((b) => (
+                    <li key={b.varianId} className="flex items-center gap-2">
+                      <span className="font-mono font-semibold">{b.kode}</span>
+                      <span className="text-stone-500">uk {b.ukuran}</span>
+                      <span className="font-semibold tabular-nums">× {b.jumlah}</span>
+                      {tampilkanHarga && (
+                        <span className="tabular-nums text-stone-500">
+                          {rupiah(b.jumlah * b.harga)}
+                        </span>
+                      )}
+                      <button
+                        onClick={() =>
+                          setKeranjang((l) => l.filter((x) => x.varianId !== b.varianId))
+                        }
+                        className="ml-auto px-1 text-stone-400 hover:text-rose-600"
+                        aria-label={`Hapus ${b.kode} ukuran ${b.ukuran}`}
+                      >
+                        ✕
+                      </button>
+                    </li>
                   ))}
-                </datalist>
-              </div>
+                </ul>
+
+                {/* Nama pembeli muncul bersama daftarnya: diisi saat pesanan
+                    sudah lengkap dan tangan tidak lagi sibuk memilih barang. */}
+                {pakaiPembeli && (
+                  <div className="mt-2">
+                    <input
+                      value={pembeli}
+                      onChange={(e) => setPembeli(e.target.value)}
+                      list="saran-pembeli"
+                      placeholder="Nama pembeli (boleh kosong)"
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pink-600"
+                    />
+                    <datalist id="saran-pembeli">
+                      {saranPembeli.map((n) => (
+                        <option key={n} value={n} />
+                      ))}
+                    </datalist>
+                  </div>
+                )}
+              </>
+            ) : (
+              terakhir && (
+                <p className="truncate pb-1.5 text-[11px] text-stone-400">
+                  terakhir: {terakhir}
+                </p>
+              )
             )}
 
-            <div className="mt-2 flex items-center gap-3 border-t border-stone-200 pt-2">
-              <span className="flex-1 text-xs text-stone-500">
-                {keranjang.length} baris · {pcs(totalPcs)}
-                {tampilkanHarga && (
-                  <span className="block text-base font-bold tabular-nums text-stone-900">
-                    {rupiah(totalHarga)}
-                  </span>
-                )}
-              </span>
+            <div
+              className={`flex items-center gap-2 ${
+                daftarTerbuka ? 'mt-2 border-t border-stone-200 pt-2' : ''
+              }`}
+            >
+              {/* Seluruh blok ringkasan jadi tombol lipat — sasaran lebar,
+                  bukan ikon kecil yang sulit dikenai jempol. */}
               <button
-                onClick={() => setKeranjang([])}
-                className="px-2 text-xs text-stone-400 hover:text-stone-600"
+                onClick={() => setDaftarTerbuka((t) => !t)}
+                /* min-w-0 wajib: tanpa itu flex-1 tidak boleh menyusut di
+                   bawah lebar isinya, dan tombol Simpan terdorong keluar tepi
+                   kanan begitu "Kosongkan" ikut muncul. */
+                className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+                aria-expanded={daftarTerbuka}
               >
-                Kosongkan
+                <Panah terbuka={daftarTerbuka} />
+                <span className="min-w-0 text-xs text-stone-500">
+                  {keranjang.length} baris · {pcs(totalPcs)}
+                  {tampilkanHarga && (
+                    <span className="block text-base font-bold tabular-nums text-stone-900">
+                      {rupiah(totalHarga)}
+                    </span>
+                  )}
+                </span>
               </button>
+
               <button
                 onClick={() => void simpan()}
                 disabled={menyimpan}
-                className="rounded-lg bg-pink-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-pink-800 disabled:opacity-50"
+                className="shrink-0 rounded-lg bg-pink-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-pink-800 disabled:opacity-50"
               >
                 {menyimpan ? 'Menyimpan…' : labelSimpan}
               </button>
@@ -286,6 +372,25 @@ export default function Keranjang({
 
       {keranjang.length === 0 && <p className="text-xs text-stone-400">{petunjuk}</p>}
     </div>
+  )
+}
+
+function Panah({ terbuka }: { terbuka: boolean }) {
+  return (
+    <svg
+      className={`h-4 w-4 shrink-0 text-stone-400 transition-transform ${
+        terbuka ? 'rotate-180' : ''
+      }`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 15 6-6 6 6" />
+    </svg>
   )
 }
 
