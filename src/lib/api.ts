@@ -240,17 +240,25 @@ export async function aturTokoProduk(produkId: string, tokoIds: string[]): Promi
 }
 
 /**
- * Nota satu kategori. Sengaja TIDAK disaring per toko: pemilik yang membuka
- * dari toko mana pun tetap ingin melihat seluruh penjualan kategorinya, dan
- * tiap barisnya sudah menyebut dari toko mana ia keluar.
+ * Nota satu kategori, atau satu toko saja kalau `tokoId` diisi.
+ *
+ * Penyaringannya di database, bukan sesudah data sampai: kalau 100 nota
+ * terakhir kategori diambil lalu disaring di sini, toko yang lebih sepi bisa
+ * tampil nyaris kosong hanya karena notanya kalah banyak — bukan karena
+ * memang tidak ada.
  */
-export async function ambilTransaksi(kategoriId: string, batas = 100): Promise<Transaksi[]> {
-  const { data, error } = await supabase
+export async function ambilTransaksi(
+  kategoriId: string,
+  tokoId?: string | null,
+  batas = 100,
+): Promise<Transaksi[]> {
+  let kueri = supabase
     .from('transaksi')
     .select('*, lokasi:lokasi_id(nama)')
     .eq('kategori_id', kategoriId)
-    .order('created_at', { ascending: false })
-    .limit(batas)
+  if (tokoId) kueri = kueri.eq('lokasi_id', tokoId)
+
+  const { data, error } = await kueri.order('created_at', { ascending: false }).limit(batas)
   if (error) throw error
   return (data ?? []) as unknown as Transaksi[]
 }

@@ -14,17 +14,32 @@ export default function Nota() {
   const [sibuk, setSibuk] = useState(true)
   const [galat, setGalat] = useState<string | null>(null)
 
+  /*
+   * Cakupan: toko yang sedang dibuka saja, atau semua toko kategorinya.
+   *
+   * Bawaannya toko ini, karena pertanyaan yang muncul di lantai toko hampir
+   * selalu tentang nota yang baru saja dibuat di sini — "tadi Bu Ani ambil
+   * apa saja". Nota toko sebelah di tengah daftar cuma jadi gangguan saat
+   * mencari yang itu.
+   *
+   * Pilihannya hanya muncul kalau kategorinya memang punya lebih dari satu
+   * toko. Menawarkan "semua toko" pada kategori bertoko tunggal adalah
+   * saringan yang tidak menyaring apa pun.
+   */
+  const banyakToko = (sesi?.tokoSekategori ?? 1) > 1
+  const [semuaToko, setSemuaToko] = useState(false)
+
   useEffect(() => {
     if (!sesi) return
     setSibuk(true)
-    ambilTransaksi(sesi.kategori.id)
+    ambilTransaksi(sesi.kategori.id, semuaToko ? null : sesi.toko.id)
       .then((d) => {
         setDaftar(d)
         setGalat(null)
       })
       .catch((e) => setGalat(pesanGalat(e)))
       .finally(() => setSibuk(false))
-  }, [sesi?.kategori.id])
+  }, [sesi?.kategori.id, sesi?.toko.id, semuaToko])
 
   const kueri = q.trim().toLowerCase()
   const tampil = kueri
@@ -52,6 +67,27 @@ export default function Nota() {
         </Link>
       </div>
 
+      {banyakToko && sesi && (
+        <div className="flex overflow-hidden rounded-lg ring-1 ring-stone-300">
+          {(
+            [
+              [false, sesi.toko.nama],
+              [true, 'Semua toko'],
+            ] as const
+          ).map(([nilai, label]) => (
+            <button
+              key={String(nilai)}
+              onClick={() => setSemuaToko(nilai)}
+              className={`flex-1 truncate py-2 text-sm font-semibold ${
+                semuaToko === nilai ? 'bg-stone-900 text-white' : 'bg-white text-stone-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -64,7 +100,15 @@ export default function Nota() {
       {sibuk ? (
         <Spinner />
       ) : tampil.length === 0 ? (
-        <Kosong teks={kueri ? `Tidak ada nota yang cocok dengan "${q}".` : 'Belum ada nota.'} />
+        <Kosong
+          teks={
+            kueri
+              ? `Tidak ada nota yang cocok dengan "${q}".`
+              : banyakToko && !semuaToko && sesi
+                ? `Belum ada nota dari ${sesi.toko.nama}.`
+                : 'Belum ada nota.'
+          }
+        />
       ) : (
         <div className="space-y-5">
           {[...perTanggal.entries()].map(([tanggal, isi]) => (
@@ -84,10 +128,11 @@ export default function Nota() {
                       </span>
                       <span className="min-w-0 flex-1 truncate text-sm">
                         {t.pembeli ?? <span className="text-stone-400">tanpa nama</span>}
-                        {/* Nota satu kategori bisa datang dari dua toko, jadi
-                            asalnya disebut — tanpa itu dua nota yang mirip
-                            tidak bisa dibedakan sama sekali. */}
-                        {t.lokasi?.nama && (
+                        {/* Asal notanya disebut hanya saat daftarnya memuat
+                            dua toko sekaligus. Saat disaring ke satu toko,
+                            mengulang namanya di tiap baris tidak menambah
+                            keterangan apa pun. */}
+                        {semuaToko && t.lokasi?.nama && (
                           <span className="block text-[11px] text-stone-400">
                             {t.lokasi.nama}
                           </span>
